@@ -1,0 +1,17 @@
+{
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit"
+    },
+    "typescript.preferences.importModuleSpecifier": "relative",
+    "tailwindCSS.experimental.classRegex": [
+        [
+            "cn\\(([^)]*)\\)",
+            "'([^']*)'"
+        ],
+        [
+            "clsx\\(([^)]*)\\)",
+            "'([^']*)'"
+        ]
+    ]
+}

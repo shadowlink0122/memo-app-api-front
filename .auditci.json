@@ -1,0 +1,11 @@
+{
+  "moderate": true,
+  "high": true,
+  "critical": true,
+  "allowlist": [],
+  "skip-dev": false,
+  "advisories": [],
+  "whitelist": [],
+  "modules": [],
+  "pass-enoaudit": true
+}

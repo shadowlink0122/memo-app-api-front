@@ -1,0 +1,76 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "dev",
+			"command": "npm",
+			"args": [
+				"run",
+				"dev"
+			],
+			"group": "build",
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"type": "shell",
+			"label": "lint",
+			"command": "npm",
+			"args": [
+				"run",
+				"lint"
+			],
+			"group": "test",
+			"problemMatcher": [
+				"$eslint-stylish"
+			]
+		},
+		{
+			"type": "shell",
+			"label": "lint:fix",
+			"command": "npm",
+			"args": [
+				"run",
+				"lint:fix"
+			],
+			"group": "test",
+			"problemMatcher": [
+				"$eslint-stylish"
+			]
+		},
+		{
+			"type": "shell",
+			"label": "type-check",
+			"command": "npm",
+			"args": [
+				"run",
+				"type-check"
+			],
+			"group": "test",
+			"problemMatcher": [
+				"$tsc"
+			]
+		},
+		{
+			"type": "shell",
+			"label": "format",
+			"command": "npm",
+			"args": [
+				"run",
+				"format"
+			],
+			"group": "test"
+		},
+		{
+			"type": "shell",
+			"label": "format:check",
+			"command": "npm",
+			"args": [
+				"run",
+				"format:check"
+			],
+			"group": "test"
+		}
+	]
+}
