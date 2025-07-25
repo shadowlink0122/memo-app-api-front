@@ -11,8 +11,8 @@ export default function Header({ className }: HeaderProps) {
   // 認証が無効化されているかチェック
   const isAuthDisabled = process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true';
 
-  // AuthContextからlogout関数を取得
-  const { logout } = useAuth();
+  // AuthContextからlogout関数とユーザー情報を取得
+  const { logout, user } = useAuth();
 
   // ログアウト処理
   const handleLogout = async () => {
@@ -66,7 +66,9 @@ export default function Header({ className }: HeaderProps) {
           {/* ユーザーアイコン */}
           <div className="flex items-center space-x-2 text-sm text-gray-600">
             <User className="h-5 w-5" />
-            <span className="hidden sm:inline">ユーザー</span>
+            <span className="hidden sm:inline">
+              {user?.username || 'ユーザー'}
+            </span>
           </div>
 
           {/* ログアウトボタン */}

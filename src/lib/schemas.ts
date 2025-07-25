@@ -42,6 +42,8 @@ export const memoSchema = z.object({
   updated_at: z.string(),
   // completed_atフィールドはAPIレスポンスに含まれていないためオプションに
   completed_at: z.string().nullable().optional(),
+  // ユーザーIDフィールドを追加（認証されたメモの所有者を識別するため）
+  user_id: z.number().optional(),
 });
 
 // メモ一覧レスポンススキーマ

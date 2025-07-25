@@ -20,6 +20,7 @@ interface MemoCardProps {
   onTagClick?: (tag: string) => void;
   onPriorityClick?: (priority: string) => void;
   onCategoryClick?: (category: string) => void;
+  onStatusClick?: (status: string) => void;
 }
 
 const MemoCard: React.FC<MemoCardProps> = ({
@@ -30,6 +31,7 @@ const MemoCard: React.FC<MemoCardProps> = ({
   onTagClick,
   onPriorityClick,
   onCategoryClick,
+  onStatusClick,
 }) => {
   // デバッグ用の情報出力
   console.log('MemoCard render:', {
@@ -111,9 +113,30 @@ const MemoCard: React.FC<MemoCardProps> = ({
 
       {/* 内容 */}
       {memo.content && (
-        <p className="text-gray-600 text-sm mb-4 line-clamp-3">
-          {memo.content}
-        </p>
+        <div className="text-gray-600 text-sm mb-4 line-clamp-3">
+          {memo.content.split('\n').map((line, lineIndex) => (
+            <div key={lineIndex}>
+              {line.split(/(\bhttps?:\/\/[^\s]+)/g).map((part, partIndex) => {
+                // URLパターンにマッチする場合
+                if (/^https?:\/\//.test(part)) {
+                  return (
+                    <a
+                      key={partIndex}
+                      href={part}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 underline break-all"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      {part}
+                    </a>
+                  );
+                }
+                return part;
+              })}
+            </div>
+          ))}
+        </div>
       )}
 
       {/* タグ */}
@@ -162,23 +185,45 @@ const MemoCard: React.FC<MemoCardProps> = ({
         </button>
 
         {/* ステータス */}
-        <span
-          className={cn(
-            'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
-            statusColors[memo.status]
-          )}
-        >
-          {statusLabels[memo.status]}
-        </span>
+        {onStatusClick ? (
+          <button
+            onClick={() => onStatusClick(memo.status)}
+            className={cn(
+              'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium hover:opacity-80 transition-opacity cursor-pointer',
+              statusColors[memo.status]
+            )}
+            title={`ステータス "${statusLabels[memo.status]}" で検索`}
+          >
+            {statusLabels[memo.status]}
+          </button>
+        ) : (
+          <span
+            className={cn(
+              'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
+              statusColors[memo.status]
+            )}
+          >
+            {statusLabels[memo.status]}
+          </span>
+        )}
       </div>
 
-      {/* 作成/更新日時 */}
+      {/* 作成/更新日時とユーザー情報 */}
       <div className="text-xs text-gray-400 text-left">
-        {memo.updated_at !== memo.created_at ? (
-          <span>更新: {formatRelativeTime(memo.updated_at)}</span>
-        ) : (
-          <span>作成: {formatRelativeTime(memo.created_at)}</span>
-        )}
+        <div className="flex items-center justify-between">
+          <span>
+            {memo.updated_at !== memo.created_at ? (
+              <>更新: {formatRelativeTime(memo.updated_at)}</>
+            ) : (
+              <>作成: {formatRelativeTime(memo.created_at)}</>
+            )}
+          </span>
+          {memo.user_id && (
+            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+              ユーザーID: {memo.user_id}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

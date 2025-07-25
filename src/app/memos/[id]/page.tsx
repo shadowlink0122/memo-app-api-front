@@ -172,9 +172,31 @@ export default function MemoDetailPage({ params }: MemoDetailPageProps) {
           <div className="mt-6">
             <h3 className="font-medium text-gray-700 mb-3">内容</h3>
             <div className="prose prose-gray max-w-none">
-              <pre className="whitespace-pre-wrap text-gray-900 leading-relaxed">
-                {memo.content}
-              </pre>
+              <div className="text-gray-900 leading-relaxed">
+                {memo.content.split('\n').map((line, lineIndex) => (
+                  <div key={lineIndex} className="mb-2">
+                    {line
+                      .split(/(\bhttps?:\/\/[^\s]+)/g)
+                      .map((part, partIndex) => {
+                        // URLパターンにマッチする場合
+                        if (/^https?:\/\//.test(part)) {
+                          return (
+                            <a
+                              key={partIndex}
+                              href={part}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 underline break-all"
+                            >
+                              {part}
+                            </a>
+                          );
+                        }
+                        return part;
+                      })}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 

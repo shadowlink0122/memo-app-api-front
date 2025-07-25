@@ -36,9 +36,48 @@ apiClient.interceptors.request.use(
   config => {
     // 毎回のリクエストで認証ヘッダーを設定
     const authHeaders = getAuthHeaders();
+
+    // より確実なヘッダー設定方法
     Object.entries(authHeaders).forEach(([key, value]) => {
-      config.headers.set(key, value);
+      if (value && config.headers) {
+        config.headers[key] = value;
+      }
     });
+
+    // デバッグ用ログ（実際のAPI呼び出し時のみ）
+    if (
+      !process.env.NEXT_PUBLIC_USE_MOCK_DATA &&
+      typeof window !== 'undefined' &&
+      !window.location.search.includes('test=true')
+    ) {
+      console.log('[API Debug] Request URL:', config.url);
+      console.log('[API Debug] Request Method:', config.method);
+      console.log('[API Debug] Auth Headers to set:', authHeaders);
+      console.log(
+        '[API Debug] Authorization Header:',
+        config.headers?.Authorization
+      );
+
+      // ヘッダーの安全な取得方法
+      try {
+        // Axiosヘッダーオブジェクトの安全な変換
+        const headersObj: Record<string, string> = {};
+        if (config.headers) {
+          // AxiosHeadersオブジェクトから値を抽出
+          Object.keys(config.headers).forEach(key => {
+            const value = config.headers[key];
+            if (value !== undefined && value !== null) {
+              headersObj[key] = String(value);
+            }
+          });
+        }
+        console.log('[API Debug] Full Headers:', headersObj);
+      } catch (headerError) {
+        console.warn('[API Debug] Header inspection failed:', headerError);
+        console.log('[API Debug] Headers object type:', typeof config.headers);
+      }
+    }
+
     return config;
   },
   error => {
@@ -60,7 +99,33 @@ export class ApiError extends Error {
 
 // レスポンスインターセプター
 apiClient.interceptors.response.use(
-  response => response,
+  response => {
+    // デバッグ用ログ（実際のAPI呼び出し時のみ）
+    if (
+      !process.env.NEXT_PUBLIC_USE_MOCK_DATA &&
+      typeof window !== 'undefined' &&
+      !window.location.search.includes('test=true')
+    ) {
+      console.log('[API Debug] Response URL:', response.config.url);
+      console.log('[API Debug] Response Status:', response.status);
+
+      // メモ一覧取得の場合、メモの数とユーザー情報をログ出力
+      if (response.config.url?.includes('/api/memos') && response.data?.memos) {
+        console.log('[API Debug] Memos count:', response.data.memos.length);
+        console.log(
+          '[API Debug] Sample memo IDs:',
+          response.data.memos
+            .slice(0, 3)
+            .map((memo: { id: number; title: string; user_id?: number }) => ({
+              id: memo.id,
+              title: memo.title,
+              user_id: memo.user_id,
+            }))
+        );
+      }
+    }
+    return response;
+  },
   error => {
     if (error.response) {
       const errorData = errorResponseSchema.safeParse(error.response.data);
@@ -134,9 +199,32 @@ class MockDataManager {
       updated_at: new Date().toISOString(),
       completed_at: null,
     },
+    {
+      id: 5,
+      title: 'リンクと改行のテストメモ',
+      content: `このメモは改行とリンクのテストです。
+
+参考リンク:
+- React公式サイト: https://react.dev/
+- Next.js: https://nextjs.org/
+- Tailwind CSS: https://tailwindcss.com/
+
+改行も正しく表示されるかテストします。
+複数行にわたる内容も
+きちんと表示されるはずです。
+
+GitHub: https://github.com/`,
+      category: 'テスト',
+      tags: ['改行', 'リンク', 'テスト'],
+      priority: 'medium' as const,
+      status: 'active' as const,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      completed_at: null,
+    },
   ];
 
-  private nextId = 5;
+  private nextId = 6;
 
   getAllMemos(): Memo[] {
     // 全てのメモを最新順でソートして返す
@@ -275,6 +363,81 @@ const mockDataManager = new MockDataManager();
 
 // API関数の定義
 export const memoApi = {
+  // デバッグ用：現在の認証状態とAPIサーバーの接続状況を確認
+  async debugAuth(): Promise<{
+    authenticated: boolean;
+    token: string | null;
+    apiConnected: boolean;
+    tokenInfo?: Record<string, unknown>;
+    headerTest?: Record<string, string>;
+  }> {
+    const token = tokenManager.getAccessToken();
+    let apiConnected = false;
+    let tokenInfo: Record<string, unknown> | undefined;
+    let headerTest: Record<string, string> | undefined;
+
+    console.log('[debugAuth] 認証デバッグ開始');
+    console.log('[debugAuth] Token存在:', !!token);
+    console.log(
+      '[debugAuth] Token値:',
+      token ? token.substring(0, 50) + '...' : 'null'
+    );
+
+    // JWTトークンの中身を確認（エラーハンドリング付き）
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        tokenInfo = payload;
+        console.log('[debugAuth] Token payload:', payload);
+      } catch (error) {
+        console.warn('[debugAuth] Token解析エラー:', error);
+      }
+    }
+
+    // 認証ヘッダーの構築テスト
+    try {
+      const authHeaders = getAuthHeaders();
+      console.log('[debugAuth] 認証ヘッダー:', authHeaders);
+      headerTest = authHeaders;
+    } catch (error) {
+      console.error('[debugAuth] 認証ヘッダー構築エラー:', error);
+    }
+
+    // APIサーバーへの接続テスト
+    try {
+      console.log('[debugAuth] API接続テスト開始');
+      const response = await apiClient.get('/api/health', { timeout: 5000 });
+      apiConnected = response.status === 200;
+      console.log('[debugAuth] API接続成功:', response.status);
+    } catch (error) {
+      console.warn('[debugAuth] APIサーバーへの接続に失敗:', error);
+      apiConnected = false;
+    }
+
+    // 認証付きAPIエンドポイントのテスト
+    if (token) {
+      try {
+        console.log('[debugAuth] 認証付きAPI接続テスト開始');
+        const response = await apiClient.get('/api/memos', { timeout: 5000 });
+        console.log('[debugAuth] 認証付きAPI接続成功:', response.status);
+        console.log('[debugAuth] メモ数:', response.data?.memos?.length || 0);
+      } catch (error) {
+        console.warn('[debugAuth] 認証付きAPIテスト失敗:', error);
+      }
+    }
+
+    const result = {
+      authenticated: !!token,
+      token: token,
+      apiConnected: apiConnected,
+      tokenInfo,
+      headerTest,
+    };
+
+    console.log('[debugAuth] 最終結果:', result);
+    return result;
+  },
+
   // メモ一覧取得
   async getMemos(
     params: Partial<SearchParams> = {}
@@ -644,3 +807,10 @@ export const healthApi = {
 
 export { apiClient };
 export default apiClient;
+
+// グローバルデバッグ関数（ブラウザコンソールから呼び出し可能）
+if (typeof window !== 'undefined') {
+  (window as unknown as Record<string, unknown>).debugAuth = () =>
+    memoApi.debugAuth();
+  (window as unknown as Record<string, unknown>).debugMemoApi = memoApi;
+}

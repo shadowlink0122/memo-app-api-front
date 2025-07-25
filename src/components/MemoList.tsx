@@ -14,6 +14,7 @@ interface MemoListProps {
   onTagSearch?: (tag: string) => void;
   onPrioritySearch?: (priority: string) => void;
   onCategorySearch?: (category: string) => void;
+  onStatusSearch?: (status: string) => void;
 }
 
 export default function MemoList({
@@ -23,6 +24,7 @@ export default function MemoList({
   onTagSearch,
   onPrioritySearch,
   onCategorySearch,
+  onStatusSearch,
 }: MemoListProps) {
   const [editingMemo, setEditingMemo] = useState<Memo | null>(null);
 
@@ -116,6 +118,7 @@ export default function MemoList({
             onTagClick={onTagSearch}
             onPriorityClick={onPrioritySearch}
             onCategoryClick={onCategorySearch}
+            onStatusClick={onStatusSearch}
           />
         ))}
       </div>
