@@ -172,9 +172,12 @@ export default function MemoDetailPage({ params }: MemoDetailPageProps) {
           <div className="mt-6">
             <h3 className="font-medium text-gray-700 mb-3">内容</h3>
             <div className="prose prose-gray max-w-none">
-              <div className="text-gray-900 leading-relaxed">
+              <div
+                className="text-gray-900 leading-relaxed"
+                style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+              >
                 {memo.content.split('\n').map((line, lineIndex) => (
-                  <div key={lineIndex} className="mb-2">
+                  <span key={lineIndex}>
                     {line
                       .split(/(\bhttps?:\/\/[^\s]+)/g)
                       .map((part, partIndex) => {
@@ -194,7 +197,8 @@ export default function MemoDetailPage({ params }: MemoDetailPageProps) {
                         }
                         return part;
                       })}
-                  </div>
+                    {lineIndex < memo.content.split('\n').length - 1 && '\n'}
+                  </span>
                 ))}
               </div>
             </div>

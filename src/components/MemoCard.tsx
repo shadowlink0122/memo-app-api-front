@@ -47,9 +47,10 @@ const MemoCard: React.FC<MemoCardProps> = ({
       data-testid="memo-item"
       className={cn(
         'rounded-lg shadow-sm border p-6 hover:shadow-md transition-shadow',
+        // ベースカラー：アーカイブ状態に基づく
         memo.status === 'archived'
-          ? 'bg-gray-200 border-gray-400 opacity-80' // アーカイブされたメモはより濃いグレー
-          : 'bg-white border-gray-200' // アクティブなメモは通常のスタイル
+          ? 'bg-gray-200 border-gray-400 opacity-80'
+          : 'bg-white border-gray-200'
       )}
     >
       {/* ヘッダー */}
@@ -113,9 +114,18 @@ const MemoCard: React.FC<MemoCardProps> = ({
 
       {/* 内容 */}
       {memo.content && (
-        <div className="text-gray-600 text-sm mb-4 line-clamp-3">
+        <div
+          className="text-gray-600 text-sm mb-4 overflow-hidden"
+          style={{
+            display: '-webkit-box',
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: 'vertical',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+          }}
+        >
           {memo.content.split('\n').map((line, lineIndex) => (
-            <div key={lineIndex}>
+            <span key={lineIndex}>
               {line.split(/(\bhttps?:\/\/[^\s]+)/g).map((part, partIndex) => {
                 // URLパターンにマッチする場合
                 if (/^https?:\/\//.test(part)) {
@@ -134,7 +144,8 @@ const MemoCard: React.FC<MemoCardProps> = ({
                 }
                 return part;
               })}
-            </div>
+              {lineIndex < memo.content.split('\n').length - 1 && '\n'}
+            </span>
           ))}
         </div>
       )}
@@ -218,11 +229,9 @@ const MemoCard: React.FC<MemoCardProps> = ({
               <>作成: {formatRelativeTime(memo.created_at)}</>
             )}
           </span>
-          {memo.user_id && (
-            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-              ユーザーID: {memo.user_id}
-            </span>
-          )}
+          <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+            ユーザーID: {memo.user_id}
+          </span>
         </div>
       </div>
     </div>

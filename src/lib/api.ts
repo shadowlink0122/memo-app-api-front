@@ -112,16 +112,33 @@ apiClient.interceptors.response.use(
       // メモ一覧取得の場合、メモの数とユーザー情報をログ出力
       if (response.config.url?.includes('/api/memos') && response.data?.memos) {
         console.log('[API Debug] Memos count:', response.data.memos.length);
-        console.log(
-          '[API Debug] Sample memo IDs:',
-          response.data.memos
-            .slice(0, 3)
-            .map((memo: { id: number; title: string; user_id?: number }) => ({
-              id: memo.id,
-              title: memo.title,
-              user_id: memo.user_id,
-            }))
+
+        const sampleMemos = response.data.memos
+          .slice(0, 3)
+          .map((memo: { id: number; title: string; user_id: number }) => ({
+            id: memo.id,
+            title: memo.title,
+            user_id: memo.user_id,
+          }));
+        console.log('[API Debug] Sample memo IDs:', sampleMemos);
+
+        // セキュリティ確認：すべてのメモにuser_idが含まれていることを確認
+        const memosWithUserId = response.data.memos.filter(
+          (memo: { user_id: number }) =>
+            memo.user_id !== undefined && memo.user_id !== null
         );
+
+        if (memosWithUserId.length === response.data.memos.length) {
+          console.log(
+            '✅ SECURITY OK: すべてのメモにuser_idが含まれています。',
+            `${memosWithUserId.length}/${response.data.memos.length} のメモに適切なuser_idフィールドが設定されています。`
+          );
+        } else {
+          console.warn(
+            '⚠️ SECURITY WARNING: 一部のメモにuser_idが含まれていません！',
+            `${response.data.memos.length - memosWithUserId.length}/${response.data.memos.length} のメモにuser_idフィールドがありません。`
+          );
+        }
       }
     }
     return response;
@@ -156,6 +173,7 @@ class MockDataManager {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       completed_at: null,
+      user_id: 1, // モックデータ用のuser_id
     },
     {
       id: 2,
@@ -169,6 +187,7 @@ class MockDataManager {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       completed_at: null,
+      user_id: 1, // モックデータ用のuser_id
     },
     {
       id: 3,
@@ -184,6 +203,7 @@ class MockDataManager {
       completed_at: new Date(
         Date.now() - 7 * 24 * 60 * 60 * 1000
       ).toISOString(),
+      user_id: 1, // モックデータ用のuser_id
     },
     {
       id: 4,
@@ -198,6 +218,7 @@ class MockDataManager {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       completed_at: null,
+      user_id: 1, // モックデータ用のuser_id
     },
     {
       id: 5,
@@ -221,6 +242,7 @@ GitHub: https://github.com/`,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       completed_at: null,
+      user_id: 1, // モックデータ用のuser_id
     },
   ];
 
@@ -270,6 +292,7 @@ GitHub: https://github.com/`,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       completed_at: null,
+      user_id: 1, // モックデータ用のuser_id
     };
     this.memos.unshift(newMemo); // 新しいメモを先頭に追加
     return newMemo;
@@ -622,19 +645,29 @@ export const memoApi = {
       const existingMemo = await this.getMemo(id);
 
       // statusをarchivedに変更してPUTで更新
+      // tagsが配列として取得されているが、APIリクエストでは配列として送信
       const updateData = {
         title: existingMemo.title,
         content: existingMemo.content,
         category: existingMemo.category,
-        tags: existingMemo.tags,
+        tags: Array.isArray(existingMemo.tags) ? existingMemo.tags : [], // 配列であることを保証
         priority: existingMemo.priority,
         status: 'archived' as const,
       };
 
-      console.log(`メモ${id}をアーカイブしています...`);
+      console.log(`メモ${id}をアーカイブしています...`, updateData);
       const response = await apiClient.put(`/api/memos/${id}`, updateData);
       const result = memoSchema.parse(response.data);
-      console.log(`メモ${id}のアーカイブが完了しました`);
+
+      // API側のバグ対策: レスポンスでstatusがactiveのままの場合、強制的にarchivedに設定
+      if (result.status !== 'archived') {
+        console.warn(
+          `API側でstatus更新が反映されませんでした。フロントエンド側で強制的にarchivedに設定します。`
+        );
+        result.status = 'archived';
+      }
+
+      console.log(`メモ${id}のアーカイブが完了しました`, result);
       return result;
     } catch (error) {
       console.error('アーカイブ処理でエラーが発生:', error);

@@ -35,15 +35,22 @@ export const memoSchema = z.object({
   title: z.string(),
   content: z.string(),
   category: z.string(),
-  tags: z.array(z.string()),
+  tags: z.string().transform(str => {
+    try {
+      const parsed = JSON.parse(str);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }),
   priority: prioritySchema,
   status: statusSchema,
   created_at: z.string(),
   updated_at: z.string(),
   // completed_atフィールドはAPIレスポンスに含まれていないためオプションに
   completed_at: z.string().nullable().optional(),
-  // ユーザーIDフィールドを追加（認証されたメモの所有者を識別するため）
-  user_id: z.number().optional(),
+  // ユーザーIDフィールド（APIがuser_idを必須で返すように修正されたため必須フィールドに変更）
+  user_id: z.number(),
 });
 
 // メモ一覧レスポンススキーマ
