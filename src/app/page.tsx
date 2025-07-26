@@ -19,27 +19,48 @@ export default function Home() {
 
   // テスト環境の初期化
   useEffect(() => {
-    if (isTestEnvironment()) {
-      console.log('ホーム画面: テスト環境を初期化中...');
-      mockAuthForTests();
+    console.log('=== 環境初期化開始 ===');
+    console.log(
+      'NEXT_PUBLIC_USE_MOCK_DATA:',
+      process.env.NEXT_PUBLIC_USE_MOCK_DATA
+    );
+    console.log(
+      'NEXT_PUBLIC_DISABLE_AUTH:',
+      process.env.NEXT_PUBLIC_DISABLE_AUTH
+    );
+
+    // テストモードまたは開発モード（?dev=true または ?test=true）でのみテスト用認証を設定
+    const shouldUseMockAuth =
+      process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true' ||
+      process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true' ||
+      (typeof window !== 'undefined' &&
+        (window.location.search.includes('dev=true') ||
+          window.location.search.includes('test=true')));
+
+    if (shouldUseMockAuth) {
+      console.log('モック認証モード: テスト用認証を設定中...');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('auth_token', 'dev-test-token-12345');
+        localStorage.setItem(
+          'user_info',
+          JSON.stringify({
+            id: 1,
+            username: 'developer',
+            email: 'dev@example.com',
+          })
+        );
+        console.log('テスト認証設定完了');
+      }
+
+      if (isTestEnvironment()) {
+        console.log('ホーム画面: テスト環境を初期化中...');
+        mockAuthForTests();
+      }
+    } else {
+      console.log('本番モード: 実際の認証システムを使用します');
     }
 
-    // 開発モード（?dev=true）でテスト用認証を設定
-    if (
-      typeof window !== 'undefined' &&
-      window.location.search.includes('dev=true')
-    ) {
-      console.log('開発モード: テスト用認証を設定中...');
-      localStorage.setItem('auth_token', 'dev-test-token-12345');
-      localStorage.setItem(
-        'user_info',
-        JSON.stringify({
-          id: 1,
-          username: 'developer',
-          email: 'dev@example.com',
-        })
-      );
-    }
+    console.log('=== 環境初期化完了 ===');
   }, []);
 
   // メモ一覧を取得（activeなメモのみ）

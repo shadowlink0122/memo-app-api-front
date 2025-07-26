@@ -18,10 +18,11 @@ const eslintConfig = [
     },
   },
   {
-    files: ['test-api-connection.js'],
+    files: ['test-api-connection.js', 'test-memo-archive.js', 'test-memo-archive-auth.js', 'test-frontend-archive.js', 'test-archive-quick.js'],
     rules: {
       '@typescript-eslint/no-require-imports': 'off',
       '@typescript-eslint/no-var-requires': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
     },
   },
 ];

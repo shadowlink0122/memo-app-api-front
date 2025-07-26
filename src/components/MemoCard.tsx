@@ -33,15 +33,6 @@ const MemoCard: React.FC<MemoCardProps> = ({
   onCategoryClick,
   onStatusClick,
 }) => {
-  // デバッグ用の情報出力
-  console.log('MemoCard render:', {
-    id: memo.id,
-    title: memo.title,
-    status: memo.status,
-    hasOnRestore: !!onRestore,
-    hasOnDelete: !!onDelete,
-  });
-
   return (
     <div
       data-testid="memo-item"
@@ -94,7 +85,16 @@ const MemoCard: React.FC<MemoCardProps> = ({
           {/* 削除ボタン：アーカイブ済みの場合は完全削除、そうでなければアーカイブ */}
           {onDelete && (
             <button
-              onClick={() => onDelete(memo.id)}
+              onClick={() => {
+                console.log('Delete button clicked for memo:', memo.id);
+                console.log(
+                  `MemoCard: 削除ボタンクリック - メモID: ${memo.id}, ステータス: ${memo.status}`
+                );
+                console.log(
+                  `削除タイプ: ${memo.status === 'archived' ? '完全削除' : 'アーカイブ'}`
+                );
+                onDelete(memo.id);
+              }}
               className="p-1 text-gray-400 hover:text-red-600 transition-colors"
               title={memo.status === 'archived' ? '完全削除' : 'アーカイブ'}
               aria-label={

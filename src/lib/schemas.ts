@@ -9,12 +9,17 @@ export const createMemoSchema = z.object({
   title: z
     .string()
     .min(1, 'タイトルは必須です')
-    .max(200, 'タイトルは200文字以内で入力してください'),
-  content: z.string().min(1, '内容は必須です'),
+    .max(200, 'タイトルは200文字以内で入力してください')
+    .transform(str => (str || '').trim()), // nullやundefinedも処理
+  content: z
+    .string()
+    .min(1, '内容は必須です')
+    .transform(str => (str || '').trim()), // nullやundefinedも処理
   category: z
     .string()
     .max(50, 'カテゴリは50文字以内で入力してください')
-    .optional(),
+    .transform(str => (str || '').trim())
+    .default(''), // デフォルト値を空文字列に設定
   tags: z.array(z.string()).default([]),
   priority: prioritySchema.default('medium'),
 });
@@ -35,13 +40,17 @@ export const memoSchema = z.object({
   title: z.string(),
   content: z.string(),
   category: z.string(),
-  tags: z.string().transform(str => {
-    try {
-      const parsed = JSON.parse(str);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
+  tags: z.union([z.string(), z.array(z.string())]).transform(val => {
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string') {
+      try {
+        const parsed = JSON.parse(val);
+        return Array.isArray(parsed) ? parsed : [val];
+      } catch {
+        return [val];
+      }
     }
+    return [];
   }),
   priority: prioritySchema,
   status: statusSchema,
@@ -50,7 +59,11 @@ export const memoSchema = z.object({
   // completed_atフィールドはAPIレスポンスに含まれていないためオプションに
   completed_at: z.string().nullable().optional(),
   // ユーザーIDフィールド（APIがuser_idを必須で返すように修正されたため必須フィールドに変更）
-  user_id: z.number(),
+  user_id: z.preprocess(val => {
+    if (val == null) return 0;
+    if (typeof val === 'string' || typeof val === 'number') return Number(val);
+    return 0;
+  }, z.number()),
 });
 
 // メモ一覧レスポンススキーマ

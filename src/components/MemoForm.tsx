@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   createMemoSchema,
@@ -42,39 +42,67 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
   }, [onClose]);
 
   const schema = isEditing ? updateMemoSchema : createMemoSchema;
+
+  // デフォルト値を明示的に設定
+  const getDefaultValues = () => {
+    if (memo) {
+      return {
+        title: memo.title || '',
+        content: memo.content || '',
+        category: memo.category || '',
+        tags: memo.tags || [],
+        priority: memo.priority || ('medium' as Priority),
+        ...(isEditing && { status: memo.status }),
+      };
+    } else {
+      return {
+        title: '',
+        content: '',
+        category: '',
+        tags: [] as string[],
+        priority: 'medium' as Priority,
+      };
+    }
+  };
+
+  // デバッグ用：フォームの値を監視
   const {
     register,
     handleSubmit,
     formState: { errors },
     setValue,
     reset,
+    watch,
+    getValues,
+    control,
   } = useForm<CreateMemoRequest | UpdateMemoRequest>({
     resolver: zodResolver(schema),
-    defaultValues: memo
-      ? {
-          title: memo.title,
-          content: memo.content,
-          category: memo.category || '',
-          tags: memo.tags,
-          priority: memo.priority,
-          ...(isEditing && { status: memo.status }),
-        }
-      : {
-          title: '',
-          content: '',
-          category: '',
-          tags: [],
-          priority: 'medium' as Priority,
-        },
+    defaultValues: getDefaultValues(),
+    mode: 'onChange', // リアルタイムバリデーション
   });
+
+  // 現在のフォーム値を監視
+  const currentValues = watch();
+  useEffect(() => {
+    console.log('MemoForm: 現在のフォーム値:', currentValues);
+  }, [currentValues]);
+
+  // デバッグ用：フォームエラーをログ出力
+  useEffect(() => {
+    if (Object.keys(errors).length > 0) {
+      console.log('MemoForm: バリデーションエラー詳細:', errors);
+      console.log('各フィールドのエラー:', {
+        title: errors.title?.message,
+        content: errors.content?.message,
+        category: errors.category?.message,
+        tags: errors.tags?.message,
+        priority: errors.priority?.message,
+      });
+    }
+  }, [errors]);
 
   const [currentTagInput, setCurrentTagInput] = useState('');
   const [tags, setTags] = useState<string[]>(memo?.tags || []);
-
-  // 直接状態管理する入力フィールドの値
-  const [titleValue, setTitleValue] = useState(memo?.title || '');
-  const [contentValue, setContentValue] = useState(memo?.content || '');
-  const [categoryValue, setCategoryValue] = useState(memo?.category || '');
 
   // メモが変更されたときにフォームをリセット
   useEffect(() => {
@@ -90,9 +118,6 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
       reset(resetData);
       setTags(memo.tags);
       setCurrentTagInput('');
-      setTitleValue(memo.title);
-      setContentValue(memo.content);
-      setCategoryValue(memo.category || '');
     } else {
       const resetData = {
         title: '',
@@ -104,9 +129,6 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
       reset(resetData);
       setTags([]);
       setCurrentTagInput('');
-      setTitleValue('');
-      setContentValue('');
-      setCategoryValue('');
     }
   }, [memo, reset, isEditing]);
 
@@ -156,15 +178,83 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
       setLoading(true);
       setError(null);
 
+      console.log('=== MemoForm onSubmit開始 ===');
+      console.log('MemoForm: 送信データ（raw）:', data);
+      console.log('MemoForm: 現在のフォーム値（getValues）:', getValues());
+      console.log('MemoForm: 環境変数チェック:', {
+        USE_MOCK_DATA: process.env.NEXT_PUBLIC_USE_MOCK_DATA,
+        DISABLE_AUTH: process.env.NEXT_PUBLIC_DISABLE_AUTH,
+        testModeFromUrl:
+          typeof window !== 'undefined'
+            ? window.location.search.includes('test=true')
+            : false,
+      });
+
+      // データのクリーニング
+      const cleanedData = {
+        ...data,
+        title: (data.title || '').trim(),
+        content: (data.content || '').trim(),
+        category: (data.category || '').trim(),
+        tags: Array.isArray(data.tags)
+          ? data.tags.filter(tag => tag.trim())
+          : [],
+        priority: data.priority || 'medium',
+      };
+
+      console.log('MemoForm: 送信データ（cleaned）:', cleanedData);
+
+      // バリデーション前チェック
+      if (!cleanedData.title) {
+        throw new Error('タイトルは必須です');
+      }
+      if (!cleanedData.content) {
+        throw new Error('内容は必須です');
+      }
+
       if (isEditing && memo) {
-        await memoApi.updateMemo(memo.id, data as UpdateMemoRequest);
+        console.log('MemoForm: メモ更新中...', memo.id);
+        await memoApi.updateMemo(memo.id, cleanedData as UpdateMemoRequest);
+        console.log('MemoForm: メモ更新成功');
       } else {
-        await memoApi.createMemo(data as CreateMemoRequest);
+        console.log('MemoForm: メモ作成中...');
+        const result = await memoApi.createMemo(
+          cleanedData as CreateMemoRequest
+        );
+        console.log('MemoForm: メモ作成成功:', result);
       }
 
       onSave();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'メモの保存に失敗しました');
+      console.error('MemoForm: 送信エラー（詳細）:', {
+        error: err,
+        message: err instanceof Error ? err.message : 'Unknown error',
+        stack: err instanceof Error ? err.stack : undefined,
+        name: err instanceof Error ? err.name : undefined,
+      });
+
+      let errorMessage = 'メモの保存に失敗しました';
+
+      if (err instanceof Error) {
+        errorMessage = err.message;
+
+        // 特定のエラーパターンをより詳細に説明
+        if (err.message.includes('invalid input')) {
+          errorMessage =
+            '入力内容に問題があります。必須項目を確認してください。';
+        } else if (err.message.includes('400')) {
+          errorMessage =
+            'リクエストデータに問題があります。入力内容を確認してください。';
+        } else if (err.message.includes('500')) {
+          errorMessage =
+            'サーバーエラーが発生しました。しばらく時間をおいて再度お試しください。';
+        } else if (err.message.includes('Network Error')) {
+          errorMessage =
+            'ネットワークエラーが発生しました。接続を確認してください。';
+        }
+      }
+
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -216,24 +306,47 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
             >
               タイトル <span className="text-red-500">*</span>
             </label>
-            <input
-              id="memo-title"
+            <Controller
               name="title"
-              type="text"
-              value={titleValue}
-              onChange={e => {
-                setTitleValue(e.target.value);
-                setValue('title', e.target.value);
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-              placeholder="メモのタイトルを入力"
-              autoComplete="off"
-              style={{ color: '#111827', backgroundColor: '#ffffff' }}
+              control={control}
+              render={({ field }) => (
+                <input
+                  id="memo-title"
+                  {...field}
+                  ref={titleInputRef}
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                  placeholder="メモのタイトルを入力"
+                  autoComplete="off"
+                  style={{ color: '#111827', backgroundColor: '#ffffff' }}
+                  onChange={e => {
+                    console.log(
+                      'Controller タイトル入力値変更:',
+                      e.target.value
+                    );
+                    field.onChange(e);
+                  }}
+                  onFocus={() => console.log('タイトルフィールドにフォーカス')}
+                  onBlur={e => {
+                    console.log(
+                      'タイトルフィールドからブラー:',
+                      e.target.value
+                    );
+                    field.onBlur();
+                  }}
+                />
+              )}
             />
             {errors.title && (
-              <p className="mt-1 text-sm text-red-600">
-                {errors.title.message}
-              </p>
+              <div className="mt-1">
+                <p className="text-sm text-red-600">
+                  {errors.title.message || 'invalid input'}
+                </p>
+                <p className="text-xs text-gray-500">
+                  デバッグ: エラータイプ = {errors.title.type}, 値 = &quot;
+                  {errors.title.ref?.value}&quot;
+                </p>
+              </div>
             )}
           </div>
 
@@ -245,19 +358,24 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
             >
               内容 <span className="text-red-500">*</span>
             </label>
-            <textarea
-              id="memo-content"
+            <Controller
               name="content"
-              value={contentValue}
-              onChange={e => {
-                setContentValue(e.target.value);
-                setValue('content', e.target.value);
-              }}
-              rows={6}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-              placeholder="メモの内容を入力"
-              autoComplete="off"
-              style={{ color: '#111827', backgroundColor: '#ffffff' }}
+              control={control}
+              render={({ field }) => (
+                <textarea
+                  id="memo-content"
+                  {...field}
+                  rows={6}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                  placeholder="メモの内容を入力"
+                  autoComplete="off"
+                  style={{ color: '#111827', backgroundColor: '#ffffff' }}
+                  onChange={e => {
+                    console.log('Controller 内容入力値変更:', e.target.value);
+                    field.onChange(e);
+                  }}
+                />
+              )}
             />
             {errors.content && (
               <p className="mt-1 text-sm text-red-600">
@@ -273,12 +391,8 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
                 カテゴリ
               </label>
               <input
+                {...register('category')}
                 type="text"
-                value={categoryValue}
-                onChange={e => {
-                  setCategoryValue(e.target.value);
-                  setValue('category', e.target.value);
-                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white placeholder-gray-400"
                 placeholder="カテゴリを入力"
                 autoComplete="off"

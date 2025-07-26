@@ -44,11 +44,6 @@ export default function Header({ className }: HeaderProps) {
     }
   };
 
-  // 認証が無効化されている場合はヘッダーを表示しない
-  if (isAuthDisabled) {
-    return null;
-  }
-
   return (
     <header
       className={`bg-white border-b border-gray-200 shadow-sm ${className || ''}`}
@@ -62,25 +57,27 @@ export default function Header({ className }: HeaderProps) {
         </div>
 
         {/* 右側：ユーザー情報とログアウトボタン */}
-        <div className="flex items-center space-x-3">
-          {/* ユーザーアイコン */}
-          <div className="flex items-center space-x-2 text-sm text-gray-600">
-            <User className="h-5 w-5" />
-            <span className="hidden sm:inline">
-              {user?.username || 'ユーザー'}
-            </span>
-          </div>
+        {!isAuthDisabled && (
+          <div className="flex items-center space-x-3">
+            {/* ユーザーアイコン */}
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <User className="h-5 w-5" />
+              <span className="hidden sm:inline">
+                {user?.username || user?.email || 'ユーザー'}
+              </span>
+            </div>
 
-          {/* ログアウトボタン */}
-          <button
-            onClick={handleLogout}
-            className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:text-red-600 hover:border-red-300 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            title="ログアウト"
-          >
-            <LogOut className="h-4 w-4" />
-            <span className="hidden sm:inline">ログアウト</span>
-          </button>
-        </div>
+            {/* ログアウトボタン */}
+            <button
+              onClick={handleLogout}
+              className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:text-red-600 hover:border-red-300 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              title="ログアウト"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">ログアウト</span>
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );
