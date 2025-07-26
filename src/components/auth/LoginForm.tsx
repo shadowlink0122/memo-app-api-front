@@ -27,23 +27,44 @@ const LoginForm: React.FC<LoginFormProps> = ({
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<LoginRequest>({
     resolver: zodResolver(loginRequestSchema),
   });
+
+  // デモ用ログイン機能
+  const handleDemoLogin = () => {
+    setValue('email', 'demo@example.com');
+    setValue('password', 'demo123456');
+  };
 
   const onSubmit = async (data: LoginRequest) => {
     try {
       setIsLoading(true);
       setError('');
 
-      console.log('ログイン試行:', { email: data.email });
+      console.log('LoginForm: ログイン試行開始:', {
+        email: data.email,
+        passwordLength: data.password.length,
+        apiUrl: process.env.NEXT_PUBLIC_AUTH_API_URL,
+        disableAuth: process.env.NEXT_PUBLIC_DISABLE_AUTH,
+      });
+
       const response = await login(data.email, data.password);
-      console.log('ログイン成功:', response);
+      console.log('LoginForm: ログイン成功:', response);
 
       onSuccess?.();
     } catch (err) {
-      console.error('ログインエラー:', err);
+      console.error('LoginForm: ログインエラー（詳細）:', {
+        error: err,
+        message: err instanceof Error ? err.message : 'Unknown error',
+        stack: err instanceof Error ? err.stack : 'No stack trace',
+        name: err instanceof Error ? err.name : 'Unknown',
+        status: err instanceof AuthApiError ? err.status : 'No status',
+        errorCode: err instanceof AuthApiError ? err.errorCode : 'No code',
+      });
+
       if (err instanceof AuthApiError) {
         switch (err.status) {
           case 401:
@@ -52,13 +73,34 @@ const LoginForm: React.FC<LoginFormProps> = ({
           case 403:
             setError('アカウントが無効化されています');
             break;
+          case 500:
+          case 502:
+          case 503:
+          case 504:
+            setError(
+              'サーバーエラーが発生しました。しばらく時間をおいて再度お試しください。'
+            );
+            break;
           default:
             setError(
-              'ログインに失敗しました。しばらく時間をおいて再度お試しください。'
+              `認証エラー (${err.status}): ${err.message || 'ログインに失敗しました'}`
             );
         }
       } else {
-        setError('ネットワークエラーが発生しました。');
+        if (err instanceof Error) {
+          if (
+            err.message.includes('Network Error') ||
+            err.message.includes('timeout')
+          ) {
+            setError(
+              'ネットワークエラー: サーバーに接続できません。サーバーが起動しているか確認してください。'
+            );
+          } else {
+            setError(`エラー: ${err.message}`);
+          }
+        } else {
+          setError('予期しないエラーが発生しました。');
+        }
       }
     } finally {
       setIsLoading(false);
@@ -175,6 +217,16 @@ const LoginForm: React.FC<LoginFormProps> = ({
         >
           <Github className="h-4 w-4 mr-2" />
           GitHubでログイン
+        </Button>
+
+        {/* デモ用ログインボタン */}
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full mt-2"
+          onClick={handleDemoLogin}
+        >
+          デモ用ログイン情報を入力
         </Button>
       </div>
 

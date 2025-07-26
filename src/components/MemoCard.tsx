@@ -20,6 +20,7 @@ interface MemoCardProps {
   onTagClick?: (tag: string) => void;
   onPriorityClick?: (priority: string) => void;
   onCategoryClick?: (category: string) => void;
+  onStatusClick?: (status: string) => void;
 }
 
 const MemoCard: React.FC<MemoCardProps> = ({
@@ -30,24 +31,17 @@ const MemoCard: React.FC<MemoCardProps> = ({
   onTagClick,
   onPriorityClick,
   onCategoryClick,
+  onStatusClick,
 }) => {
-  // デバッグ用の情報出力
-  console.log('MemoCard render:', {
-    id: memo.id,
-    title: memo.title,
-    status: memo.status,
-    hasOnRestore: !!onRestore,
-    hasOnDelete: !!onDelete,
-  });
-
   return (
     <div
       data-testid="memo-item"
       className={cn(
         'rounded-lg shadow-sm border p-6 hover:shadow-md transition-shadow',
+        // ベースカラー：アーカイブ状態に基づく
         memo.status === 'archived'
-          ? 'bg-gray-200 border-gray-400 opacity-80' // アーカイブされたメモはより濃いグレー
-          : 'bg-white border-gray-200' // アクティブなメモは通常のスタイル
+          ? 'bg-gray-200 border-gray-400 opacity-80'
+          : 'bg-white border-gray-200'
       )}
     >
       {/* ヘッダー */}
@@ -91,18 +85,42 @@ const MemoCard: React.FC<MemoCardProps> = ({
           {/* 削除ボタン：アーカイブ済みの場合は完全削除、そうでなければアーカイブ */}
           {onDelete && (
             <button
-              onClick={() => onDelete(memo.id)}
-              className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-              title={memo.status === 'archived' ? '完全削除' : 'アーカイブ'}
-              aria-label={
-                memo.status === 'archived' ? '完全削除' : 'アーカイブ'
+              onClick={() => {
+                console.log('Delete button clicked for memo:', memo.id);
+                console.log(
+                  `MemoCard: 削除ボタンクリック - メモID: ${memo.id}, ステータス: ${memo.status}`
+                );
+                console.log(
+                  `削除タイプ: ${memo.status === 'archived' ? '完全削除' : '完了'}`
+                );
+                onDelete(memo.id);
+              }}
+              className={
+                memo.status === 'archived'
+                  ? 'p-1 text-gray-400 hover:text-red-600 transition-colors'
+                  : 'p-1 text-gray-400 hover:text-green-600 transition-colors'
               }
+              title={memo.status === 'archived' ? '完全削除' : '完了'}
+              aria-label={memo.status === 'archived' ? '完全削除' : '完了'}
               data-testid="memo-delete-button"
             >
               {memo.status === 'archived' ? (
                 <Trash2 className="h-4 w-4" />
               ) : (
-                <Trash2 className="h-4 w-4" />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
               )}
             </button>
           )}
@@ -111,9 +129,40 @@ const MemoCard: React.FC<MemoCardProps> = ({
 
       {/* 内容 */}
       {memo.content && (
-        <p className="text-gray-600 text-sm mb-4 line-clamp-3">
-          {memo.content}
-        </p>
+        <div
+          className="text-gray-600 text-sm mb-4 overflow-hidden"
+          style={{
+            display: '-webkit-box',
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: 'vertical',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+          }}
+        >
+          {memo.content.split('\n').map((line, lineIndex) => (
+            <span key={lineIndex}>
+              {line.split(/(\bhttps?:\/\/[^\s]+)/g).map((part, partIndex) => {
+                // URLパターンにマッチする場合
+                if (/^https?:\/\//.test(part)) {
+                  return (
+                    <a
+                      key={partIndex}
+                      href={part}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 underline break-all"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      {part}
+                    </a>
+                  );
+                }
+                return part;
+              })}
+              {lineIndex < memo.content.split('\n').length - 1 && '\n'}
+            </span>
+          ))}
+        </div>
       )}
 
       {/* タグ */}
@@ -162,23 +211,41 @@ const MemoCard: React.FC<MemoCardProps> = ({
         </button>
 
         {/* ステータス */}
-        <span
-          className={cn(
-            'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
-            statusColors[memo.status]
-          )}
-        >
-          {statusLabels[memo.status]}
-        </span>
+        {onStatusClick ? (
+          <button
+            onClick={() => onStatusClick(memo.status)}
+            className={cn(
+              'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium hover:opacity-80 transition-opacity cursor-pointer',
+              statusColors[memo.status]
+            )}
+            title={`ステータス "${statusLabels[memo.status]}" で検索`}
+          >
+            {statusLabels[memo.status]}
+          </button>
+        ) : (
+          <span
+            className={cn(
+              'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
+              statusColors[memo.status]
+            )}
+          >
+            {statusLabels[memo.status]}
+          </span>
+        )}
       </div>
 
-      {/* 作成/更新日時 */}
+      {/* 作成/更新日時とユーザー情報 */}
       <div className="text-xs text-gray-400 text-left">
-        {memo.updated_at !== memo.created_at ? (
-          <span>更新: {formatRelativeTime(memo.updated_at)}</span>
-        ) : (
-          <span>作成: {formatRelativeTime(memo.created_at)}</span>
-        )}
+        <div className="flex items-center justify-between">
+          <span>
+            {memo.updated_at !== memo.created_at ? (
+              <>更新: {formatRelativeTime(memo.updated_at)}</>
+            ) : (
+              <>作成: {formatRelativeTime(memo.created_at)}</>
+            )}
+          </span>
+          {/* ユーザーID表示は非表示に変更 */}
+        </div>
       </div>
     </div>
   );

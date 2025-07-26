@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { MemoListResponse, SearchParams } from '@/lib/schemas';
 import { memoApi } from '@/lib/api';
 import MemoList from '@/components/MemoList';
@@ -19,6 +20,7 @@ export default function MemoListClient({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
   const [searchParams, setSearchParams] = useState<Partial<SearchParams>>({});
+  const urlSearchParams = useSearchParams();
 
   // メモ一覧を取得
   const fetchMemos = async (params: Partial<SearchParams> = {}) => {
@@ -36,8 +38,35 @@ export default function MemoListClient({
 
   // 初回読み込み時にメモを取得
   useEffect(() => {
-    fetchMemos();
-  }, []);
+    // URLパラメータから検索条件を取得
+    const initialParams: Partial<SearchParams> = {};
+
+    const status = urlSearchParams.get('status');
+    if (status) {
+      initialParams.status = status as 'active' | 'archived';
+    }
+
+    const tags = urlSearchParams.get('tags');
+    if (tags) {
+      initialParams.tags = tags;
+    }
+
+    const priority = urlSearchParams.get('priority');
+    if (priority) {
+      initialParams.priority = priority as 'low' | 'medium' | 'high';
+    }
+
+    const category = urlSearchParams.get('category');
+    if (category) {
+      initialParams.category = category;
+    }
+
+    // 検索パラメータを設定
+    setSearchParams(initialParams);
+
+    // 検索条件がある場合はその条件で、ない場合は通常の取得
+    fetchMemos(initialParams);
+  }, [urlSearchParams]);
 
   // 検索パラメータが変更されたときに再取得
   const handleSearchChange = (params: Partial<SearchParams>) => {
@@ -71,6 +100,13 @@ export default function MemoListClient({
     fetchMemos(newParams);
   };
 
+  // ステータス検索処理
+  const handleStatusSearch = (status: string) => {
+    const newParams = { status: status as 'active' | 'archived' };
+    setSearchParams(newParams);
+    fetchMemos(newParams);
+  };
+
   return (
     <>
       {/* 検索・フィルター */}
@@ -97,6 +133,7 @@ export default function MemoListClient({
         onTagSearch={handleTagSearch}
         onPrioritySearch={handlePrioritySearch}
         onCategorySearch={handleCategorySearch}
+        onStatusSearch={handleStatusSearch}
       />
     </>
   );
