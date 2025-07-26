@@ -91,21 +91,36 @@ const MemoCard: React.FC<MemoCardProps> = ({
                   `MemoCard: 削除ボタンクリック - メモID: ${memo.id}, ステータス: ${memo.status}`
                 );
                 console.log(
-                  `削除タイプ: ${memo.status === 'archived' ? '完全削除' : 'アーカイブ'}`
+                  `削除タイプ: ${memo.status === 'archived' ? '完全削除' : '完了'}`
                 );
                 onDelete(memo.id);
               }}
-              className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-              title={memo.status === 'archived' ? '完全削除' : 'アーカイブ'}
-              aria-label={
-                memo.status === 'archived' ? '完全削除' : 'アーカイブ'
+              className={
+                memo.status === 'archived'
+                  ? 'p-1 text-gray-400 hover:text-red-600 transition-colors'
+                  : 'p-1 text-gray-400 hover:text-green-600 transition-colors'
               }
+              title={memo.status === 'archived' ? '完全削除' : '完了'}
+              aria-label={memo.status === 'archived' ? '完全削除' : '完了'}
               data-testid="memo-delete-button"
             >
               {memo.status === 'archived' ? (
                 <Trash2 className="h-4 w-4" />
               ) : (
-                <Trash2 className="h-4 w-4" />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
               )}
             </button>
           )}
@@ -229,9 +244,7 @@ const MemoCard: React.FC<MemoCardProps> = ({
               <>作成: {formatRelativeTime(memo.created_at)}</>
             )}
           </span>
-          <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-            ユーザーID: {memo.user_id}
-          </span>
+          {/* ユーザーID表示は非表示に変更 */}
         </div>
       </div>
     </div>
