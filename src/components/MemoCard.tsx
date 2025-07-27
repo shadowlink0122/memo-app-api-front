@@ -21,6 +21,7 @@ interface MemoCardProps {
   onPriorityClick?: (priority: string) => void;
   onCategoryClick?: (category: string) => void;
   onStatusClick?: (status: string) => void;
+  onDeadlineColorClick?: (color: string) => void;
 }
 
 const MemoCard: React.FC<MemoCardProps> = ({
@@ -32,16 +33,37 @@ const MemoCard: React.FC<MemoCardProps> = ({
   onPriorityClick,
   onCategoryClick,
   onStatusClick,
+  onDeadlineColorClick,
 }) => {
+  // 締切色分けロジック（色名も返す）
+  const getDeadlineColorInfo = () => {
+    if (memo.status !== 'active' || !memo.deadline)
+      return { class: '', name: '' };
+    // バックグラウンド白、フォント濃いグレーで統一（枠なし）
+    return { class: 'bg-white text-gray-900', name: 'gray' };
+  };
+  const deadlineColorInfo = getDeadlineColorInfo();
+
   return (
     <div
       data-testid="memo-item"
       className={cn(
         'rounded-lg shadow-sm border p-6 hover:shadow-md transition-shadow',
-        // ベースカラー：アーカイブ状態に基づく
         memo.status === 'archived'
           ? 'bg-gray-200 border-gray-400 opacity-80'
-          : 'bg-white border-gray-200'
+          : memo.status === 'active' && memo.deadline
+            ? (() => {
+                const now = new Date();
+                const deadline = new Date(memo.deadline);
+                const diffMs = deadline.getTime() - now.getTime();
+                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                if (diffMs < 0) return 'bg-red-100 border-red-400';
+                if (diffDays === 0) return 'bg-orange-200 border-orange-500';
+                if (diffDays === 1) return 'bg-yellow-100 border-yellow-400';
+                if (diffDays === 2) return 'bg-green-100 border-green-400';
+                return 'bg-white border-gray-200';
+              })()
+            : 'bg-white border-gray-200'
       )}
     >
       {/* ヘッダー */}
@@ -197,7 +219,7 @@ const MemoCard: React.FC<MemoCardProps> = ({
       )}
 
       {/* メタ情報 */}
-      <div className="flex items-center justify-start text-xs text-gray-500 space-x-4 mb-3">
+      <div className="flex items-center justify-start text-xs text-gray-500 space-x-4 mb-1">
         {/* 優先度 */}
         <button
           onClick={() => onPriorityClick?.(memo.priority)}
@@ -234,8 +256,80 @@ const MemoCard: React.FC<MemoCardProps> = ({
         )}
       </div>
 
+      {/* 締切バッジ（1段下に表示） */}
+      {memo.deadline && (
+        <div className="mt-1 mb-2">
+          <button
+            type="button"
+            className={cn(
+              'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
+              deadlineColorInfo.class
+            )}
+            title="締め切りでフィルタ"
+            onClick={() => onDeadlineColorClick?.(deadlineColorInfo.name)}
+          >
+            <svg
+              className="h-3 w-3 mr-1 text-gray-900"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+            締め切り:{' '}
+            {new Date(memo.deadline).toLocaleString('ja-JP', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+            {/* 残り日数・時間表示 */}
+            {(() => {
+              const now = new Date();
+              const deadline = new Date(memo.deadline);
+              const diffMs = deadline.getTime() - now.getTime();
+              if (diffMs <= 0)
+                return (
+                  <span className="ml-2 text-red-600 font-bold">期限切れ</span>
+                );
+              const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+              const diffHours = Math.floor(
+                (diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+              );
+              const diffMinutes = Math.floor(
+                (diffMs % (1000 * 60 * 60)) / (1000 * 60)
+              );
+              let remainText = '';
+              if (diffDays > 0) {
+                remainText = `残り${diffDays}日${diffHours > 0 ? diffHours + '時間' : ''}`;
+              } else if (diffHours > 0) {
+                remainText = `残り${diffHours}時間${diffMinutes > 0 ? diffMinutes + '分' : ''}`;
+              } else {
+                remainText = `残り${diffMinutes}分`;
+              }
+              // 色はメモ本体の色に合わせる
+              let color = '';
+              if (diffMs < 0) color = 'text-red-600';
+              else if (diffDays === 0) color = 'text-orange-600';
+              else if (diffDays === 1) color = 'text-yellow-600';
+              else if (diffDays === 2) color = 'text-green-600';
+              else color = 'text-gray-700';
+              return (
+                <span className={'ml-2 font-bold ' + color}>{remainText}</span>
+              );
+            })()}
+          </button>
+        </div>
+      )}
+
       {/* 作成/更新日時とユーザー情報 */}
-      <div className="text-xs text-gray-400 text-left">
+      <div className="text-xs text-gray-700 text-left">
         <div className="flex items-center justify-between">
           <span>
             {memo.updated_at !== memo.created_at ? (

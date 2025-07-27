@@ -22,6 +22,7 @@ export const createMemoSchema = z.object({
     .default(''), // デフォルト値を空文字列に設定
   tags: z.array(z.string()).default([]),
   priority: prioritySchema.default('medium'),
+  deadline: z.string().optional(), // ISO8601文字列
 });
 
 // メモ更新リクエストスキーマ
@@ -32,6 +33,7 @@ export const updateMemoSchema = z.object({
   tags: z.array(z.string()).optional(),
   priority: prioritySchema.optional(),
   status: statusSchema.optional(),
+  deadline: z.string().optional(), // ISO8601文字列
 });
 
 // メモレスポンススキーマ
@@ -58,6 +60,7 @@ export const memoSchema = z.object({
   updated_at: z.string(),
   // completed_atフィールドはAPIレスポンスに含まれていないためオプションに
   completed_at: z.string().nullable().optional(),
+  deadline: z.string().nullable().optional(), // ISO8601文字列 or null
   // ユーザーIDフィールド（APIがuser_idを必須で返すように修正されたため必須フィールドに変更）
   user_id: z.preprocess(val => {
     if (val == null) return 0;
@@ -82,6 +85,8 @@ export const searchParamsSchema = z.object({
   priority: prioritySchema.optional(),
   search: z.string().optional(),
   tags: z.string().optional(),
+  deadlineFrom: z.string().optional(), // ISO8601文字列
+  deadlineTo: z.string().optional(), // ISO8601文字列
   page: z.number().min(1).default(1),
   limit: z.number().min(1).max(100).default(10),
 });

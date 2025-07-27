@@ -107,6 +107,45 @@ export default function MemoListClient({
     fetchMemos(newParams);
   };
 
+  // 締切色フィルタ検索処理
+  const handleDeadlineColorSearch = (color: string) => {
+    // 色名から日数範囲を決定
+    let deadlineFrom: string | undefined;
+    let deadlineTo: string | undefined;
+    const now = new Date();
+    if (color === 'red') {
+      // 締切過ぎ: deadline < now
+      deadlineTo = now.toISOString();
+    } else if (color === 'orange') {
+      // 1日以内: now <= deadline < now+1日
+      deadlineFrom = now.toISOString();
+      deadlineTo = new Date(
+        now.getTime() + 1 * 24 * 60 * 60 * 1000
+      ).toISOString();
+    } else if (color === 'yellow') {
+      // 2日以内: now+1日 <= deadline < now+2日
+      deadlineFrom = new Date(
+        now.getTime() + 1 * 24 * 60 * 60 * 1000
+      ).toISOString();
+      deadlineTo = new Date(
+        now.getTime() + 2 * 24 * 60 * 60 * 1000
+      ).toISOString();
+    } else if (color === 'green') {
+      // 3日以内: now+2日 <= deadline < now+3日
+      deadlineFrom = new Date(
+        now.getTime() + 2 * 24 * 60 * 60 * 1000
+      ).toISOString();
+      deadlineTo = new Date(
+        now.getTime() + 3 * 24 * 60 * 60 * 1000
+      ).toISOString();
+    }
+    const newParams: Partial<SearchParams> = {};
+    if (deadlineFrom) newParams.deadlineFrom = deadlineFrom;
+    if (deadlineTo) newParams.deadlineTo = deadlineTo;
+    setSearchParams(newParams);
+    fetchMemos(newParams);
+  };
+
   return (
     <>
       {/* 検索・フィルター */}
@@ -134,6 +173,7 @@ export default function MemoListClient({
         onPrioritySearch={handlePrioritySearch}
         onCategorySearch={handleCategorySearch}
         onStatusSearch={handleStatusSearch}
+        onDeadlineColorClick={handleDeadlineColorSearch}
       />
     </>
   );

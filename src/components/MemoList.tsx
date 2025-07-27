@@ -15,6 +15,7 @@ interface MemoListProps {
   onPrioritySearch?: (priority: string) => void;
   onCategorySearch?: (category: string) => void;
   onStatusSearch?: (status: string) => void;
+  onDeadlineColorClick?: (color: string) => void;
 }
 
 export default function MemoList({
@@ -25,6 +26,7 @@ export default function MemoList({
   onPrioritySearch,
   onCategorySearch,
   onStatusSearch,
+  onDeadlineColorClick,
 }: MemoListProps) {
   const [editingMemo, setEditingMemo] = useState<Memo | null>(null);
 
@@ -158,6 +160,7 @@ export default function MemoList({
             onPriorityClick={onPrioritySearch}
             onCategoryClick={onCategorySearch}
             onStatusClick={onStatusSearch}
+            onDeadlineColorClick={onDeadlineColorClick}
           />
         ))}
       </div>

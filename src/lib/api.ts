@@ -173,6 +173,7 @@ class MockDataManager {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       completed_at: null,
+      deadline: null,
       user_id: 1, // モックデータ用のuser_id
     },
     {
@@ -187,6 +188,7 @@ class MockDataManager {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       completed_at: null,
+      deadline: null,
       user_id: 1, // モックデータ用のuser_id
     },
     {
@@ -203,6 +205,7 @@ class MockDataManager {
       completed_at: new Date(
         Date.now() - 7 * 24 * 60 * 60 * 1000
       ).toISOString(),
+      deadline: null,
       user_id: 1, // モックデータ用のuser_id
     },
     {
@@ -218,6 +221,7 @@ class MockDataManager {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       completed_at: null,
+      deadline: null,
       user_id: 1, // モックデータ用のuser_id
     },
     {
@@ -242,6 +246,7 @@ GitHub: https://github.com/`,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       completed_at: null,
+      deadline: null,
       user_id: 1, // モックデータ用のuser_id
     },
   ];
@@ -292,6 +297,7 @@ GitHub: https://github.com/`,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       completed_at: null,
+      deadline: data.deadline ?? null,
       user_id: 1, // モックデータ用のuser_id
     };
     this.memos.unshift(newMemo); // 新しいメモを先頭に追加

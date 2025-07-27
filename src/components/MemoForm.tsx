@@ -3,14 +3,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  createMemoSchema,
-  updateMemoSchema,
+import { createMemoSchema, updateMemoSchema } from '@/lib/schemas';
+import type {
   CreateMemoRequest,
   UpdateMemoRequest,
   Memo,
   Priority,
 } from '@/lib/schemas';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import { memoApi } from '@/lib/api';
 import { priorityLabels, statusLabels } from '@/lib/utils';
 import { X, Save, Tag } from 'lucide-react';
@@ -18,7 +19,7 @@ import { X, Save, Tag } from 'lucide-react';
 interface MemoFormProps {
   memo?: Memo;
   onClose: () => void;
-  onSave: () => void;
+  onSave: (memo: CreateMemoRequest | UpdateMemoRequest) => void;
 }
 
 export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
@@ -52,6 +53,8 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
         category: memo.category || '',
         tags: memo.tags || [],
         priority: memo.priority || ('medium' as Priority),
+        // タイムゾーン付きの値をそのまま使う
+        deadline: memo.deadline || '',
         ...(isEditing && { status: memo.status }),
       };
     } else {
@@ -61,6 +64,7 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
         category: '',
         tags: [] as string[],
         priority: 'medium' as Priority,
+        deadline: '',
       };
     }
   };
@@ -113,6 +117,8 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
         category: memo.category || '',
         tags: memo.tags,
         priority: memo.priority,
+        // タイムゾーン付きの値をそのまま渡す
+        deadline: memo.deadline || '',
         ...(isEditing && { status: memo.status }),
       };
       reset(resetData);
@@ -125,6 +131,7 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
         category: '',
         tags: [],
         priority: 'medium' as Priority,
+        deadline: '',
       };
       reset(resetData);
       setTags([]);
@@ -191,6 +198,25 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
       });
 
       // データのクリーニング
+      // deadlineをRFC3339形式（例: 2025-07-30T12:00:00+09:00）で送信
+      let formattedDeadline: string | undefined = undefined;
+      if (data.deadline) {
+        const date = new Date(data.deadline);
+        // タイムゾーンオフセット（例: +09:00）を取得
+        const tzOffsetMin = date.getTimezoneOffset();
+        const absOffset = Math.abs(tzOffsetMin);
+        const tzSign = tzOffsetMin > 0 ? '-' : '+';
+        const tzHour = String(Math.floor(absOffset / 60)).padStart(2, '0');
+        const tzMin = String(absOffset % 60).padStart(2, '0');
+        // yyyy-MM-ddTHH:mm:ss+09:00 形式
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hour = String(date.getHours()).padStart(2, '0');
+        const minute = String(date.getMinutes()).padStart(2, '0');
+        const second = String(date.getSeconds()).padStart(2, '0');
+        formattedDeadline = `${year}-${month}-${day}T${hour}:${minute}:${second}${tzSign}${tzHour}:${tzMin}`;
+      }
       const cleanedData = {
         ...data,
         title: (data.title || '').trim(),
@@ -200,6 +226,7 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
           ? data.tags.filter(tag => tag.trim())
           : [],
         priority: data.priority || 'medium',
+        deadline: formattedDeadline,
       };
 
       console.log('MemoForm: 送信データ（cleaned）:', cleanedData);
@@ -224,7 +251,7 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
         console.log('MemoForm: メモ作成成功:', result);
       }
 
-      onSave();
+      onSave(cleanedData);
     } catch (err) {
       console.error('MemoForm: 送信エラー（詳細）:', {
         error: err,
@@ -318,7 +345,6 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                   placeholder="メモのタイトルを入力"
                   autoComplete="off"
-                  style={{ color: '#111827', backgroundColor: '#ffffff' }}
                   onChange={e => {
                     console.log(
                       'Controller タイトル入力値変更:',
@@ -369,7 +395,6 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                   placeholder="メモの内容を入力"
                   autoComplete="off"
-                  style={{ color: '#111827', backgroundColor: '#ffffff' }}
                   onChange={e => {
                     console.log('Controller 内容入力値変更:', e.target.value);
                     field.onChange(e);
@@ -380,6 +405,109 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
             {errors.content && (
               <p className="mt-1 text-sm text-red-600">
                 {errors.content.message}
+              </p>
+            )}
+          </div>
+          {/* 締め切り（内容入力の下に移動、グラフィカルUI） */}
+          <div>
+            <label
+              htmlFor="memo-deadline"
+              className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2"
+            >
+              締め切り
+              <span className="text-xs text-gray-400">（任意）</span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 text-blue-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+            </label>
+            <Controller
+              name="deadline"
+              control={control}
+              render={({ field }) => (
+                <DatePicker
+                  id="memo-deadline"
+                  selected={
+                    field.value ? new Date(field.value.replace(' ', 'T')) : null
+                  }
+                  onChange={(date: Date | null) => {
+                    if (!date) {
+                      field.onChange('');
+                      return;
+                    }
+                    // JST (UTC+9) でISO文字列化
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const hour = String(date.getHours()).padStart(2, '0');
+                    const minute = String(date.getMinutes()).padStart(2, '0');
+                    // yyyy-MM-ddTHH:mm+09:00 形式
+                    const isoJst = `${year}-${month}-${day}T${hour}:${minute}:00+09:00`;
+                    field.onChange(isoJst);
+                  }}
+                  showTimeSelect
+                  timeFormat="HH:mm"
+                  timeIntervals={15}
+                  dateFormat="yyyy-MM-dd HH:mm"
+                  minDate={new Date()}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                  placeholderText="締め切り日時を選択"
+                  style={{ color: '#111827', backgroundColor: '#ffffff' }}
+                  isClearable
+                />
+              )}
+            />
+            {/* 締切バッジ（色分け） */}
+            {(() => {
+              const deadlineStr = getValues().deadline;
+              if (!deadlineStr) return null;
+              let deadline: Date;
+              try {
+                deadline = new Date(deadlineStr.replace(' ', 'T'));
+              } catch {
+                return null;
+              }
+              const now = new Date();
+              const diffMs = deadline.getTime() - now.getTime();
+              const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+              let badgeText = '';
+              if (diffMs < 0) {
+                badgeText = '期限切れ';
+              } else if (diffDays === 0) {
+                badgeText = '本日締切';
+              } else if (diffDays === 1) {
+                badgeText = 'あと1日';
+              } else if (diffDays === 2) {
+                badgeText = 'あと2日';
+              } else if (diffDays === 3) {
+                badgeText = 'あと3日';
+              } else {
+                badgeText = `${diffDays}日後`;
+              }
+              // メモの色（ピンク）と被らない色: 濃い紺色＋黄色文字＋黄色枠
+              return (
+                <span className="inline-block mt-2 px-3 py-1 rounded-full text-xs font-bold bg-indigo-900 text-yellow-300 border border-yellow-400">
+                  {badgeText}
+                </span>
+              );
+            })()}
+            <p className="mt-1 text-xs text-gray-500">例: 2025-07-31 23:59</p>
+            <p className="mt-1 text-xs text-gray-400">
+              締め切りを設定すると、期限管理ができます。未設定の場合は制限ありません。
+            </p>
+            {errors.deadline && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.deadline.message}
               </p>
             )}
           </div>
