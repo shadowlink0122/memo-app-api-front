@@ -37,9 +37,12 @@ const MemoCard: React.FC<MemoCardProps> = ({
 }) => {
   // 締切色分けロジック（色名も返す）
   const getDeadlineColorInfo = () => {
-    if (memo.status !== 'active' || !memo.deadline)
-      return { class: '', name: '' };
-    // バックグラウンド白、フォント濃いグレーで統一（枠なし）
+    if (!memo.deadline) return { class: '', name: '' };
+    if (memo.status === 'archived') {
+      // archivedは黒フォント
+      return { class: 'bg-white text-black', name: 'gray' };
+    }
+    // activeは従来通り
     return { class: 'bg-white text-gray-900', name: 'gray' };
   };
   const deadlineColorInfo = getDeadlineColorInfo();

@@ -462,7 +462,6 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
                   minDate={new Date()}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                   placeholderText="締め切り日時を選択"
-                  style={{ color: '#111827', backgroundColor: '#ffffff' }}
                   isClearable
                 />
               )}
@@ -494,7 +493,6 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
               } else {
                 badgeText = `${diffDays}日後`;
               }
-              // メモの色（ピンク）と被らない色: 濃い紺色＋黄色文字＋黄色枠
               return (
                 <span className="inline-block mt-2 px-3 py-1 rounded-full text-xs font-bold bg-indigo-900 text-yellow-300 border border-yellow-400">
                   {badgeText}
