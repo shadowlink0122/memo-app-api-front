@@ -265,7 +265,7 @@ const MemoCard: React.FC<MemoCardProps> = ({
           <button
             type="button"
             className={cn(
-              'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
+              'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity',
               deadlineColorInfo.class
             )}
             title="締め切りでフィルタ"
