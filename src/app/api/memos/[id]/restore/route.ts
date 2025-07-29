@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { memoApi } from '@/lib/api';
 
-interface RouteParams {
-  params: Promise<{ id: string }>;
-}
-
 // PATCH /api/memos/[id]/restore - メモ復元
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
+export async function PATCH(
+  request: NextRequest,
+  context: { params: { id: string } }
+) {
   try {
-    const { id } = await params;
-    const memoId = parseInt(id);
+    const memoId = parseInt(context.params.id);
 
     if (isNaN(memoId)) {
       return NextResponse.json({ error: '無効なメモIDです' }, { status: 400 });

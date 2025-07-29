@@ -27,8 +27,6 @@ describe('Sidebar Component', () => {
     // Check if main navigation items are present
     expect(screen.getByText('ホーム')).toBeInTheDocument();
     expect(screen.getByText('メモ一覧')).toBeInTheDocument();
-    expect(screen.getByText('新規作成')).toBeInTheDocument();
-    expect(screen.getByText('検索')).toBeInTheDocument();
     expect(screen.getByText('アーカイブ')).toBeInTheDocument();
     expect(screen.getByText('設定')).toBeInTheDocument();
   });

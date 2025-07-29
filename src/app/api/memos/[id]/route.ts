@@ -58,7 +58,23 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: '無効なメモIDです' }, { status: 400 });
     }
 
-    await memoApi.permanentlyDeleteMemo(memoId);
+    // バックエンドAPIサーバーに直接DELETE要求を送信
+    const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8080';
+    const response = await fetch(`${API_BASE_URL}/api/memos/${memoId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.API_TOKEN || 'test-token'}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('バックエンドAPI削除エラー:', response.status, errorData);
+      throw new Error(`バックエンドAPI削除に失敗: ${response.status}`);
+    }
+
+    console.log(`メモ ${memoId} の完全削除が完了しました`);
     return NextResponse.json({ message: 'メモが完全削除されました' });
   } catch (error) {
     console.error('メモ完全削除エラー:', error);

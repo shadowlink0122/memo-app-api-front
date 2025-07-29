@@ -36,7 +36,20 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const memo = await memoApi.createMemo(body);
+    // Zodバリデーション
+    const { createMemoSchema } = await import('@/lib/schemas');
+    const parseResult = createMemoSchema.safeParse(body);
+    if (!parseResult.success) {
+      console.error('メモ作成バリデーションエラー:', parseResult.error);
+      return NextResponse.json(
+        {
+          error: 'リクエストデータが不正です',
+          details: parseResult.error.issues,
+        },
+        { status: 400 }
+      );
+    }
+    const memo = await memoApi.createMemo(parseResult.data);
     return NextResponse.json(memo, { status: 201 });
   } catch (error) {
     console.error('メモ作成エラー:', error);
