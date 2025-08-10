@@ -16,7 +16,7 @@
 /playwright-report/
 /blob-report/
 /playwright/.cache/
-*.test.js.map
+*.test.js.map 
 *.spec.js.map
 
 # next.js

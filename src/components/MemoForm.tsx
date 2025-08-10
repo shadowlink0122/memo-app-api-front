@@ -1,16 +1,17 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  createMemoSchema,
-  updateMemoSchema,
+import { createMemoSchema, updateMemoSchema } from '@/lib/schemas';
+import type {
   CreateMemoRequest,
   UpdateMemoRequest,
   Memo,
   Priority,
 } from '@/lib/schemas';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import { memoApi } from '@/lib/api';
 import { priorityLabels, statusLabels } from '@/lib/utils';
 import { X, Save, Tag } from 'lucide-react';
@@ -18,7 +19,7 @@ import { X, Save, Tag } from 'lucide-react';
 interface MemoFormProps {
   memo?: Memo;
   onClose: () => void;
-  onSave: () => void;
+  onSave: (memo: CreateMemoRequest | UpdateMemoRequest) => void;
 }
 
 export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
@@ -42,39 +43,76 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
   }, [onClose]);
 
   const schema = isEditing ? updateMemoSchema : createMemoSchema;
+
+  // デフォルト値を明示的に設定
+  const getDefaultValues = () => {
+    if (memo) {
+      return {
+        title: memo.title || '',
+        content: memo.content || '',
+        category: memo.category || '',
+        tags: memo.tags || [],
+        priority: memo.priority || ('medium' as Priority),
+        // タイムゾーン付きの値をそのまま使う
+        deadline: memo.deadline || '',
+        ...(isEditing && { status: memo.status }),
+      };
+    } else {
+      return {
+        title: '',
+        content: '',
+        category: '',
+        tags: [] as string[],
+        priority: 'medium' as Priority,
+        deadline: '',
+      };
+    }
+  };
+
+  // デバッグ用：フォームの値を監視
   const {
     register,
     handleSubmit,
     formState: { errors },
     setValue,
     reset,
+    watch,
+    getValues,
+    control,
   } = useForm<CreateMemoRequest | UpdateMemoRequest>({
     resolver: zodResolver(schema),
-    defaultValues: memo
-      ? {
-          title: memo.title,
-          content: memo.content,
-          category: memo.category || '',
-          tags: memo.tags,
-          priority: memo.priority,
-          ...(isEditing && { status: memo.status }),
-        }
-      : {
-          title: '',
-          content: '',
-          category: '',
-          tags: [],
-          priority: 'medium' as Priority,
-        },
+    defaultValues: getDefaultValues(),
+    mode: 'onChange', // リアルタイムバリデーション
   });
+
+  // 現在のフォーム値を監視
+  const currentValues = watch();
+  useEffect(() => {
+    console.log('MemoForm: 現在のフォーム値:', currentValues);
+  }, [currentValues]);
+
+  // デバッグ用：フォームエラーをログ出力
+  useEffect(() => {
+    if (Object.keys(errors).length > 0) {
+      console.log('MemoForm: バリデーションエラー詳細:', errors);
+      console.log('各フィールドのエラー:', {
+        title: errors.title?.message,
+        content: errors.content?.message,
+        category: errors.category?.message,
+        tags: errors.tags?.message,
+        priority: errors.priority?.message,
+      });
+    }
+  }, [errors]);
 
   const [currentTagInput, setCurrentTagInput] = useState('');
   const [tags, setTags] = useState<string[]>(memo?.tags || []);
 
-  // 直接状態管理する入力フィールドの値
-  const [titleValue, setTitleValue] = useState(memo?.title || '');
-  const [contentValue, setContentValue] = useState(memo?.content || '');
-  const [categoryValue, setCategoryValue] = useState(memo?.category || '');
+  // サジェスト用の全体データ
+  const [allTags, setAllTags] = useState<string[]>([]);
+  const [allCategories, setAllCategories] = useState<string[]>([]);
+  const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
+  const [showTagSuggestions, setShowTagSuggestions] = useState(false);
 
   // メモが変更されたときにフォームをリセット
   useEffect(() => {
@@ -85,14 +123,13 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
         category: memo.category || '',
         tags: memo.tags,
         priority: memo.priority,
+        // タイムゾーン付きの値をそのまま渡す
+        deadline: memo.deadline || '',
         ...(isEditing && { status: memo.status }),
       };
       reset(resetData);
       setTags(memo.tags);
       setCurrentTagInput('');
-      setTitleValue(memo.title);
-      setContentValue(memo.content);
-      setCategoryValue(memo.category || '');
     } else {
       const resetData = {
         title: '',
@@ -100,13 +137,11 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
         category: '',
         tags: [],
         priority: 'medium' as Priority,
+        deadline: '',
       };
       reset(resetData);
       setTags([]);
       setCurrentTagInput('');
-      setTitleValue('');
-      setContentValue('');
-      setCategoryValue('');
     }
   }, [memo, reset, isEditing]);
 
@@ -115,10 +150,31 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
     setValue('tags', tags);
   }, [tags, setValue]);
 
+  // 入力値に基づくサジェストのフィルタ
+  const categoryInputValue = (watch('category') as string) || '';
+  const filteredCategorySuggestions = allCategories
+    .filter(
+      c =>
+        c.toLowerCase().includes(categoryInputValue.toLowerCase()) &&
+        c !== categoryInputValue
+    )
+    .slice(0, 8);
+
+  const filteredTagSuggestions = allTags
+    .filter(
+      t =>
+        t.toLowerCase().includes(currentTagInput.toLowerCase()) &&
+        !tags.some(tag => tag.toLowerCase() === t.toLowerCase())
+    )
+    .slice(0, 10);
+
   // タグ追加処理
   const addTag = (tagText: string) => {
     const trimmedTag = tagText.trim();
-    if (trimmedTag && !tags.includes(trimmedTag)) {
+    if (
+      trimmedTag &&
+      !tags.some(tag => tag.toLowerCase() === trimmedTag.toLowerCase())
+    ) {
       setTags([...tags, trimmedTag]);
       setCurrentTagInput('');
     }
@@ -156,19 +212,152 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
       setLoading(true);
       setError(null);
 
-      if (isEditing && memo) {
-        await memoApi.updateMemo(memo.id, data as UpdateMemoRequest);
-      } else {
-        await memoApi.createMemo(data as CreateMemoRequest);
+      console.log('=== MemoForm onSubmit開始 ===');
+      console.log('MemoForm: 送信データ（raw）:', data);
+      console.log('MemoForm: 現在のフォーム値（getValues）:', getValues());
+      console.log('MemoForm: 環境変数チェック:', {
+        USE_MOCK_DATA: process.env.NEXT_PUBLIC_USE_MOCK_DATA,
+        DISABLE_AUTH: process.env.NEXT_PUBLIC_DISABLE_AUTH,
+        testModeFromUrl:
+          typeof window !== 'undefined'
+            ? window.location.search.includes('test=true')
+            : false,
+      });
+
+      // データのクリーニング
+      // deadlineをRFC3339形式（例: 2025-07-30T12:00:00+09:00）で送信
+      let formattedDeadline: string | undefined = undefined;
+      if (data.deadline) {
+        const date = new Date(data.deadline);
+        // タイムゾーンオフセット（例: +09:00）を取得
+        const tzOffsetMin = date.getTimezoneOffset();
+        const absOffset = Math.abs(tzOffsetMin);
+        const tzSign = tzOffsetMin > 0 ? '-' : '+';
+        const tzHour = String(Math.floor(absOffset / 60)).padStart(2, '0');
+        const tzMin = String(absOffset % 60).padStart(2, '0');
+        // yyyy-MM-ddTHH:mm:ss+09:00 形式
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hour = String(date.getHours()).padStart(2, '0');
+        const minute = String(date.getMinutes()).padStart(2, '0');
+        const second = String(date.getSeconds()).padStart(2, '0');
+        formattedDeadline = `${year}-${month}-${day}T${hour}:${minute}:${second}${tzSign}${tzHour}:${tzMin}`;
+      }
+      const cleanedData = {
+        ...data,
+        title: (data.title || '').trim(),
+        content: (data.content || '').trim(),
+        category: (data.category || '').trim(),
+        tags: Array.isArray(data.tags)
+          ? data.tags.filter(tag => tag.trim())
+          : [],
+        priority: data.priority || 'medium',
+        deadline: formattedDeadline,
+      };
+
+      console.log('MemoForm: 送信データ（cleaned）:', cleanedData);
+
+      // バリデーション前チェック
+      if (!cleanedData.title) {
+        throw new Error('タイトルは必須です');
+      }
+      if (!cleanedData.content) {
+        throw new Error('内容は必須です');
       }
 
-      onSave();
+      if (isEditing && memo) {
+        console.log('MemoForm: メモ更新中...', memo.id);
+        await memoApi.updateMemo(memo.id, cleanedData as UpdateMemoRequest);
+        console.log('MemoForm: メモ更新成功');
+      } else {
+        console.log('MemoForm: メモ作成中...');
+        const result = await memoApi.createMemo(
+          cleanedData as CreateMemoRequest
+        );
+        console.log('MemoForm: メモ作成成功:', result);
+      }
+
+      onSave(cleanedData);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'メモの保存に失敗しました');
+      console.error('MemoForm: 送信エラー（詳細）:', {
+        error: err,
+        message: err instanceof Error ? err.message : 'Unknown error',
+        stack: err instanceof Error ? err.stack : undefined,
+        name: err instanceof Error ? err.name : undefined,
+      });
+
+      let errorMessage = 'メモの保存に失敗しました';
+
+      if (err instanceof Error) {
+        errorMessage = err.message;
+
+        // 特定のエラーパターンをより詳細に説明
+        if (err.message.includes('invalid input')) {
+          errorMessage =
+            '入力内容に問題があります。必須項目を確認してください。';
+        } else if (err.message.includes('400')) {
+          errorMessage =
+            'リクエストデータに問題があります。入力内容を確認してください。';
+        } else if (err.message.includes('500')) {
+          errorMessage =
+            'サーバーエラーが発生しました。しばらく時間をおいて再度お試しください。';
+        } else if (err.message.includes('Network Error')) {
+          errorMessage =
+            'ネットワークエラーが発生しました。接続を確認してください。';
+        }
+      }
+
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
+
+  // 過去のメモからタグ/カテゴリ候補を収集
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await memoApi.getMemos({});
+        const memos = res.memos || [];
+
+        // タグの頻度集計
+        const tagCount: Record<string, number> = {};
+        memos.forEach(m => {
+          if (Array.isArray(m.tags)) {
+            m.tags.forEach(t => {
+              const tt = String(t).trim();
+              if (tt) tagCount[tt] = (tagCount[tt] || 0) + 1;
+            });
+          }
+        });
+        const tagsSorted = Object.keys(tagCount).sort(
+          (a, b) => tagCount[b] - tagCount[a]
+        );
+
+        // カテゴリの頻度集計
+        const catCount: Record<string, number> = {};
+        memos.forEach(m => {
+          const c = (m.category || '').trim();
+          if (c) catCount[c] = (catCount[c] || 0) + 1;
+        });
+        const categoriesSorted = Object.keys(catCount).sort(
+          (a, b) => catCount[b] - catCount[a]
+        );
+
+        if (mounted) {
+          setAllTags(tagsSorted);
+          setAllCategories(categoriesSorted);
+        }
+      } catch (e) {
+        console.warn('サジェスト用データの取得に失敗:', e);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <div
@@ -216,24 +405,46 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
             >
               タイトル <span className="text-red-500">*</span>
             </label>
-            <input
-              id="memo-title"
+            <Controller
               name="title"
-              type="text"
-              value={titleValue}
-              onChange={e => {
-                setTitleValue(e.target.value);
-                setValue('title', e.target.value);
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-              placeholder="メモのタイトルを入力"
-              autoComplete="off"
-              style={{ color: '#111827', backgroundColor: '#ffffff' }}
+              control={control}
+              render={({ field }) => (
+                <input
+                  id="memo-title"
+                  {...field}
+                  ref={titleInputRef}
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                  placeholder="メモのタイトルを入力"
+                  autoComplete="off"
+                  onChange={e => {
+                    console.log(
+                      'Controller タイトル入力値変更:',
+                      e.target.value
+                    );
+                    field.onChange(e);
+                  }}
+                  onFocus={() => console.log('タイトルフィールドにフォーカス')}
+                  onBlur={e => {
+                    console.log(
+                      'タイトルフィールドからブラー:',
+                      e.target.value
+                    );
+                    field.onBlur();
+                  }}
+                />
+              )}
             />
             {errors.title && (
-              <p className="mt-1 text-sm text-red-600">
-                {errors.title.message}
-              </p>
+              <div className="mt-1">
+                <p className="text-sm text-red-600">
+                  {errors.title.message || 'invalid input'}
+                </p>
+                <p className="text-xs text-gray-500">
+                  デバッグ: エラータイプ = {errors.title.type}, 値 = &quot;
+                  {errors.title.ref?.value}&quot;
+                </p>
+              </div>
             )}
           </div>
 
@@ -245,23 +456,128 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
             >
               内容 <span className="text-red-500">*</span>
             </label>
-            <textarea
-              id="memo-content"
+            <Controller
               name="content"
-              value={contentValue}
-              onChange={e => {
-                setContentValue(e.target.value);
-                setValue('content', e.target.value);
-              }}
-              rows={6}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-              placeholder="メモの内容を入力"
-              autoComplete="off"
-              style={{ color: '#111827', backgroundColor: '#ffffff' }}
+              control={control}
+              render={({ field }) => (
+                <textarea
+                  id="memo-content"
+                  {...field}
+                  rows={6}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                  placeholder="メモの内容を入力"
+                  autoComplete="off"
+                  onChange={e => {
+                    console.log('Controller 内容入力値変更:', e.target.value);
+                    field.onChange(e);
+                  }}
+                />
+              )}
             />
             {errors.content && (
               <p className="mt-1 text-sm text-red-600">
                 {errors.content.message}
+              </p>
+            )}
+          </div>
+          {/* 締め切り（内容入力の下に移動、グラフィカルUI） */}
+          <div>
+            <label
+              htmlFor="memo-deadline"
+              className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2"
+            >
+              締め切り
+              <span className="text-xs text-gray-400">（任意）</span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 text-blue-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+            </label>
+            <Controller
+              name="deadline"
+              control={control}
+              render={({ field }) => (
+                <DatePicker
+                  id="memo-deadline"
+                  selected={
+                    field.value ? new Date(field.value.replace(' ', 'T')) : null
+                  }
+                  onChange={(date: Date | null) => {
+                    if (!date) {
+                      field.onChange('');
+                      return;
+                    }
+                    // JST (UTC+9) でISO文字列化
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const hour = String(date.getHours()).padStart(2, '0');
+                    const minute = String(date.getMinutes()).padStart(2, '0');
+                    // yyyy-MM-ddTHH:mm+09:00 形式
+                    const isoJst = `${year}-${month}-${day}T${hour}:${minute}:00+09:00`;
+                    field.onChange(isoJst);
+                  }}
+                  showTimeSelect
+                  timeFormat="HH:mm"
+                  timeIntervals={15}
+                  dateFormat="yyyy-MM-dd HH:mm"
+                  minDate={new Date()}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                  placeholderText="締め切り日時を選択"
+                  isClearable
+                />
+              )}
+            />
+            {/* 締切バッジ（色分け） */}
+            {(() => {
+              const deadlineStr = getValues().deadline;
+              if (!deadlineStr) return null;
+              let deadline: Date;
+              try {
+                deadline = new Date(deadlineStr.replace(' ', 'T'));
+              } catch {
+                return null;
+              }
+              const now = new Date();
+              const diffMs = deadline.getTime() - now.getTime();
+              const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+              let badgeText = '';
+              if (diffMs < 0) {
+                badgeText = '期限切れ';
+              } else if (diffDays === 0) {
+                badgeText = '本日締切';
+              } else if (diffDays === 1) {
+                badgeText = 'あと1日';
+              } else if (diffDays === 2) {
+                badgeText = 'あと2日';
+              } else if (diffDays === 3) {
+                badgeText = 'あと3日';
+              } else {
+                badgeText = `${diffDays}日後`;
+              }
+              return (
+                <span className="inline-block mt-2 px-3 py-1 rounded-full text-xs font-bold bg-indigo-900 text-yellow-300 border border-yellow-400">
+                  {badgeText}
+                </span>
+              );
+            })()}
+            <p className="mt-1 text-xs text-gray-500">例: 2025-07-31 23:59</p>
+            <p className="mt-1 text-xs text-gray-400">
+              締め切りを設定すると、期限管理ができます。未設定の場合は制限ありません。
+            </p>
+            {errors.deadline && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.deadline.message}
               </p>
             )}
           </div>
@@ -270,20 +586,48 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
             {/* カテゴリ */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                カテゴリ
+                カテゴリ <span className="text-xs text-gray-400">（任意）</span>
               </label>
-              <input
-                type="text"
-                value={categoryValue}
-                onChange={e => {
-                  setCategoryValue(e.target.value);
-                  setValue('category', e.target.value);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white placeholder-gray-400"
-                placeholder="カテゴリを入力"
-                autoComplete="off"
-                style={{ color: '#111827', backgroundColor: '#ffffff' }}
-              />
+              <div className="relative">
+                <input
+                  {...register('category')}
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white placeholder-gray-400"
+                  placeholder="カテゴリを入力"
+                  autoComplete="off"
+                  style={{ color: '#111827', backgroundColor: '#ffffff' }}
+                  onFocus={() => setShowCategorySuggestions(true)}
+                  onBlur={() =>
+                    setTimeout(() => setShowCategorySuggestions(false), 150)
+                  }
+                />
+
+                {showCategorySuggestions &&
+                  filteredCategorySuggestions.length > 0 && (
+                    <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg text-gray-900">
+                      <ul className="max-h-56 overflow-auto py-1">
+                        {filteredCategorySuggestions.map(c => (
+                          <li key={c}>
+                            <button
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-900"
+                              onMouseDown={e => e.preventDefault()}
+                              onClick={() => {
+                                setValue('category', c, {
+                                  shouldValidate: true,
+                                  shouldDirty: true,
+                                });
+                                setShowCategorySuggestions(false);
+                              }}
+                            >
+                              {c}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+              </div>
               {errors.category && (
                 <p className="mt-1 text-sm text-red-600">
                   {errors.category.message}
@@ -333,18 +677,52 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
           {/* タグ */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              タグ
+              タグ <span className="text-xs text-gray-400">（任意）</span>
             </label>
-            <input
-              type="text"
-              value={currentTagInput}
-              onChange={e => setCurrentTagInput(e.target.value)}
-              onKeyPress={handleTagKeyPress}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white placeholder-gray-400"
-              placeholder="タグを入力してEnterで確定"
-              autoComplete="off"
-              style={{ color: '#111827', backgroundColor: '#ffffff' }}
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={currentTagInput}
+                onChange={e => {
+                  setCurrentTagInput(e.target.value);
+                  if (!showTagSuggestions) setShowTagSuggestions(true);
+                }}
+                onKeyPress={handleTagKeyPress}
+                onFocus={() => setShowTagSuggestions(true)}
+                onBlur={() =>
+                  setTimeout(() => setShowTagSuggestions(false), 150)
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white placeholder-gray-400"
+                placeholder="タグを入力してEnterで確定"
+                autoComplete="off"
+                style={{ color: '#111827', backgroundColor: '#ffffff' }}
+              />
+
+              {showTagSuggestions && filteredTagSuggestions.length > 0 && (
+                <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg text-gray-900">
+                  <div className="px-3 py-2 text-xs text-gray-600">候補</div>
+                  <ul className="max-h-56 overflow-auto py-1">
+                    {filteredTagSuggestions.map(t => (
+                      <li key={t}>
+                        <button
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-900"
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => {
+                            addTag(t);
+                            // 候補は開いたままにして、続けて追加できるようにする
+                            setShowTagSuggestions(true);
+                          }}
+                        >
+                          <Tag className="h-4 w-4 text-gray-400" />
+                          {t}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
             <p className="mt-1 text-sm text-gray-500">
               タグを入力してEnterキーを押すと確定されます
             </p>

@@ -2,16 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  Home,
-  FileText,
-  Plus,
-  Search,
-  Archive,
-  Settings,
-  Menu,
-  X,
-} from 'lucide-react';
+import { Home, FileText, Archive, Settings, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -31,16 +22,6 @@ const navigation = [
     name: 'メモ一覧',
     href: '/memos',
     icon: FileText,
-  },
-  {
-    name: '新規作成',
-    href: '/memos/create',
-    icon: Plus,
-  },
-  {
-    name: '検索',
-    href: '/search',
-    icon: Search,
   },
   {
     name: 'アーカイブ',

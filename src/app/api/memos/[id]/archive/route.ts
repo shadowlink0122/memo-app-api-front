@@ -15,10 +15,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: '無効なメモIDです' }, { status: 400 });
     }
 
-    const archivedMemo = await memoApi.archiveMemo(memoId);
+    console.log(`フロントエンドAPIルート: メモ${memoId}のアーカイブ開始`);
+
+    // deleteMemo関数を使用（内部でAPIサーバーとの通信とバグ対策を処理）
+    const archivedMemo = await memoApi.deleteMemo(memoId);
+
+    console.log(
+      `フロントエンドAPIルート: メモ${memoId}のアーカイブ完了`,
+      archivedMemo
+    );
     return NextResponse.json(archivedMemo);
   } catch (error) {
-    console.error('メモアーカイブエラー:', error);
+    console.error('フロントエンドAPIルート: メモアーカイブエラー:', error);
     return NextResponse.json(
       { error: 'メモのアーカイブに失敗しました' },
       { status: 500 }
