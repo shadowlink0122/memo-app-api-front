@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosRequestConfig } from 'axios';
 import {
   CreateMemoRequest,
   UpdateMemoRequest,
@@ -9,7 +9,7 @@ import {
   memoListSchema,
   errorResponseSchema,
 } from './schemas';
-import { tokenManager } from './auth-api';
+import { tokenManager, authApi } from './auth-api';
 
 // 認証ヘッダーの設定
 const getAuthHeaders = () => {
@@ -30,6 +30,17 @@ const getAuthHeaders = () => {
 const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
 });
+
+// リフレッシュ制御（多重実行防止と待機キュー）
+let isRefreshing = false as boolean;
+let refreshSubscribers: Array<(token: string | null) => void> = [];
+const onRefreshed = (token: string | null) => {
+  refreshSubscribers.forEach(cb => cb(token));
+  refreshSubscribers = [];
+};
+const addRefreshSubscriber = (cb: (token: string | null) => void) => {
+  refreshSubscribers.push(cb);
+};
 
 // リクエストインターセプター（動的に認証ヘッダーを追加）
 apiClient.interceptors.request.use(
@@ -65,7 +76,7 @@ apiClient.interceptors.request.use(
         if (config.headers) {
           // AxiosHeadersオブジェクトから値を抽出
           Object.keys(config.headers).forEach(key => {
-            const value = config.headers[key];
+            const value = (config.headers as Record<string, unknown>)[key];
             if (value !== undefined && value !== null) {
               headersObj[key] = String(value);
             }
@@ -143,18 +154,116 @@ apiClient.interceptors.response.use(
     }
     return response;
   },
-  error => {
+  async error => {
+    const originalRequest = error.config as AxiosRequestConfig & {
+      _retry?: boolean;
+    };
+
     if (error.response) {
+      const status: number = error.response.status;
+      const data = error.response.data;
+      const serverMessage: string | undefined =
+        (data && typeof data === 'object' && (data.message || data.error)) ||
+        undefined;
+
+      const isAuthError =
+        status === 401 ||
+        status === 403 ||
+        (typeof serverMessage === 'string' &&
+          /invalid\s*token/i.test(serverMessage));
+
+      if (isAuthError) {
+        console.warn('[Auth Refresh] Auth error detected', {
+          status,
+          serverMessage,
+          url: originalRequest?.url,
+        });
+        if (!originalRequest._retry) {
+          originalRequest._retry = true;
+
+          // 既にリフレッシュ中なら完了を待つ
+          if (isRefreshing) {
+            console.log(
+              '[Auth Refresh] Refresh in progress, queueing request',
+              {
+                url: originalRequest?.url,
+              }
+            );
+            return new Promise((resolve, reject) => {
+              addRefreshSubscriber(newToken => {
+                if (newToken) {
+                  console.log(
+                    '[Auth Refresh] Using refreshed token (queued), retrying request',
+                    {
+                      url: originalRequest?.url,
+                    }
+                  );
+                  originalRequest.headers = originalRequest.headers || {};
+                  (originalRequest.headers as Record<string, string>)[
+                    'Authorization'
+                  ] = `Bearer ${newToken}`;
+                  resolve(apiClient(originalRequest));
+                } else {
+                  console.warn(
+                    '[Auth Refresh] Refresh failed (queued request)'
+                  );
+                  reject(error);
+                }
+              });
+            });
+          }
+
+          // リフレッシュ実行
+          isRefreshing = true;
+          try {
+            console.info(
+              '[Auth Refresh] Starting token refresh via /api/auth/refresh'
+            );
+            await authApi.refreshToken();
+            const newToken = tokenManager.getAccessToken();
+            isRefreshing = false;
+            onRefreshed(newToken);
+
+            console.info(
+              '[Auth Refresh] Token refresh succeeded, retrying original request',
+              {
+                url: originalRequest?.url,
+              }
+            );
+            originalRequest.headers = originalRequest.headers || {};
+            if (newToken) {
+              (originalRequest.headers as Record<string, string>)[
+                'Authorization'
+              ] = `Bearer ${newToken}`;
+            }
+            return apiClient(originalRequest);
+          } catch (refreshErr) {
+            isRefreshing = false;
+            onRefreshed(null);
+            console.error(
+              '[Auth Refresh] Token refresh failed, clearing tokens',
+              refreshErr
+            );
+            // 画面遷移はせず、トークンのみクリア
+            tokenManager.clearTokens();
+            return Promise.reject(refreshErr);
+          }
+        }
+      }
+
+      // 認証以外のエラーは既存処理でApiErrorに変換
       const errorData = errorResponseSchema.safeParse(error.response.data);
       if (errorData.success) {
-        throw new ApiError(
-          error.response.status,
-          errorData.data.error,
-          errorData.data.message || errorData.data.error
+        return Promise.reject(
+          new ApiError(
+            error.response.status,
+            errorData.data.error,
+            errorData.data.message || errorData.data.error
+          )
         );
       }
     }
-    throw error;
+    return Promise.reject(error);
   }
 );
 
@@ -894,7 +1003,6 @@ export const memoApi = {
       }
       console.log('✅ モックデータからの完全削除が完了しました');
       console.log('=== permanentlyDeleteMemo成功終了（テストモード） ===');
-      return;
     }
 
     try {
