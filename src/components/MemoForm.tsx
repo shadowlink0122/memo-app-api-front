@@ -108,6 +108,12 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
   const [currentTagInput, setCurrentTagInput] = useState('');
   const [tags, setTags] = useState<string[]>(memo?.tags || []);
 
+  // サジェスト用の全体データ
+  const [allTags, setAllTags] = useState<string[]>([]);
+  const [allCategories, setAllCategories] = useState<string[]>([]);
+  const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
+  const [showTagSuggestions, setShowTagSuggestions] = useState(false);
+
   // メモが変更されたときにフォームをリセット
   useEffect(() => {
     if (memo) {
@@ -144,10 +150,31 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
     setValue('tags', tags);
   }, [tags, setValue]);
 
+  // 入力値に基づくサジェストのフィルタ
+  const categoryInputValue = (watch('category') as string) || '';
+  const filteredCategorySuggestions = allCategories
+    .filter(
+      c =>
+        c.toLowerCase().includes(categoryInputValue.toLowerCase()) &&
+        c !== categoryInputValue
+    )
+    .slice(0, 8);
+
+  const filteredTagSuggestions = allTags
+    .filter(
+      t =>
+        t.toLowerCase().includes(currentTagInput.toLowerCase()) &&
+        !tags.some(tag => tag.toLowerCase() === t.toLowerCase())
+    )
+    .slice(0, 10);
+
   // タグ追加処理
   const addTag = (tagText: string) => {
     const trimmedTag = tagText.trim();
-    if (trimmedTag && !tags.includes(trimmedTag)) {
+    if (
+      trimmedTag &&
+      !tags.some(tag => tag.toLowerCase() === trimmedTag.toLowerCase())
+    ) {
       setTags([...tags, trimmedTag]);
       setCurrentTagInput('');
     }
@@ -286,6 +313,51 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
       setLoading(false);
     }
   };
+
+  // 過去のメモからタグ/カテゴリ候補を収集
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await memoApi.getMemos({});
+        const memos = res.memos || [];
+
+        // タグの頻度集計
+        const tagCount: Record<string, number> = {};
+        memos.forEach(m => {
+          if (Array.isArray(m.tags)) {
+            m.tags.forEach(t => {
+              const tt = String(t).trim();
+              if (tt) tagCount[tt] = (tagCount[tt] || 0) + 1;
+            });
+          }
+        });
+        const tagsSorted = Object.keys(tagCount).sort(
+          (a, b) => tagCount[b] - tagCount[a]
+        );
+
+        // カテゴリの頻度集計
+        const catCount: Record<string, number> = {};
+        memos.forEach(m => {
+          const c = (m.category || '').trim();
+          if (c) catCount[c] = (catCount[c] || 0) + 1;
+        });
+        const categoriesSorted = Object.keys(catCount).sort(
+          (a, b) => catCount[b] - catCount[a]
+        );
+
+        if (mounted) {
+          setAllTags(tagsSorted);
+          setAllCategories(categoriesSorted);
+        }
+      } catch (e) {
+        console.warn('サジェスト用データの取得に失敗:', e);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <div
@@ -514,16 +586,48 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
             {/* カテゴリ */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                カテゴリ
+                カテゴリ <span className="text-xs text-gray-400">（任意）</span>
               </label>
-              <input
-                {...register('category')}
-                type="text"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white placeholder-gray-400"
-                placeholder="カテゴリを入力"
-                autoComplete="off"
-                style={{ color: '#111827', backgroundColor: '#ffffff' }}
-              />
+              <div className="relative">
+                <input
+                  {...register('category')}
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white placeholder-gray-400"
+                  placeholder="カテゴリを入力"
+                  autoComplete="off"
+                  style={{ color: '#111827', backgroundColor: '#ffffff' }}
+                  onFocus={() => setShowCategorySuggestions(true)}
+                  onBlur={() =>
+                    setTimeout(() => setShowCategorySuggestions(false), 150)
+                  }
+                />
+
+                {showCategorySuggestions &&
+                  filteredCategorySuggestions.length > 0 && (
+                    <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg text-gray-900">
+                      <ul className="max-h-56 overflow-auto py-1">
+                        {filteredCategorySuggestions.map(c => (
+                          <li key={c}>
+                            <button
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-900"
+                              onMouseDown={e => e.preventDefault()}
+                              onClick={() => {
+                                setValue('category', c, {
+                                  shouldValidate: true,
+                                  shouldDirty: true,
+                                });
+                                setShowCategorySuggestions(false);
+                              }}
+                            >
+                              {c}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+              </div>
               {errors.category && (
                 <p className="mt-1 text-sm text-red-600">
                   {errors.category.message}
@@ -573,18 +677,52 @@ export default function MemoForm({ memo, onClose, onSave }: MemoFormProps) {
           {/* タグ */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              タグ
+              タグ <span className="text-xs text-gray-400">（任意）</span>
             </label>
-            <input
-              type="text"
-              value={currentTagInput}
-              onChange={e => setCurrentTagInput(e.target.value)}
-              onKeyPress={handleTagKeyPress}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white placeholder-gray-400"
-              placeholder="タグを入力してEnterで確定"
-              autoComplete="off"
-              style={{ color: '#111827', backgroundColor: '#ffffff' }}
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={currentTagInput}
+                onChange={e => {
+                  setCurrentTagInput(e.target.value);
+                  if (!showTagSuggestions) setShowTagSuggestions(true);
+                }}
+                onKeyPress={handleTagKeyPress}
+                onFocus={() => setShowTagSuggestions(true)}
+                onBlur={() =>
+                  setTimeout(() => setShowTagSuggestions(false), 150)
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white placeholder-gray-400"
+                placeholder="タグを入力してEnterで確定"
+                autoComplete="off"
+                style={{ color: '#111827', backgroundColor: '#ffffff' }}
+              />
+
+              {showTagSuggestions && filteredTagSuggestions.length > 0 && (
+                <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg text-gray-900">
+                  <div className="px-3 py-2 text-xs text-gray-600">候補</div>
+                  <ul className="max-h-56 overflow-auto py-1">
+                    {filteredTagSuggestions.map(t => (
+                      <li key={t}>
+                        <button
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-900"
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => {
+                            addTag(t);
+                            // 候補は開いたままにして、続けて追加できるようにする
+                            setShowTagSuggestions(true);
+                          }}
+                        >
+                          <Tag className="h-4 w-4 text-gray-400" />
+                          {t}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
             <p className="mt-1 text-sm text-gray-500">
               タグを入力してEnterキーを押すと確定されます
             </p>
